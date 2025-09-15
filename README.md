@@ -121,6 +121,8 @@ Or from source with `pip install -e .`
 | `LEAN_SERVER_INIT_REPLS`              | `{}`          | Map of header to REPL count to initialize with         |
 | `LEAN_SERVER_API_KEY`                 | `None`        | Optional API key for authentication                    |
 | `LEAN_SERVER_REPL_PATH`               | `repl/.lake/build/bin/repl` | Path to REPL directory, relative to workspace    |
+| `LEAN_SERVER_AST_EXPORT_BIN`          | `ast_export/.lake/build/bin/ast-export` | Path to AST exporter binary                      |
+| `LEAN_SERVER_AST_EXPORT_PROJECT_DIR`  | `ast_export`    | Path to AST exporter project directory                  |
 | `LEAN_SERVER_PROJECT_DIR`             | `mathlib4`    | Path to Lean 4 project directory, relative to workspace        |
 | `LEAN_SERVER_DATABASE_URL`            |               | URL for the database (if using one)                   |
 
