@@ -27,12 +27,15 @@ class Settings(BaseSettings):
 
     lean_version: str = "v4.15.0"
     repl_path: Path = BASE_DIR / "repl/.lake/build/bin/repl"
+    ast_export_bin: Path = BASE_DIR / "ast_export/.lake/build/bin/ast-export"
+    ast_export_project_dir: Path = BASE_DIR / "ast_export"
     project_dir: Path = BASE_DIR / "mathlib4"
 
     max_repls: int = max((os.cpu_count() or 1) - 1, 1)
     max_repl_uses: int = -1
     max_repl_mem: int = 8
     max_wait: int = 60
+    max_ast_jobs: int = max((os.cpu_count() or 1) - 1, 1)
 
     init_repls: dict[str, int] = {}
 
@@ -56,6 +59,13 @@ class Settings(BaseSettings):
     @field_validator("max_repls", mode="before")
     @classmethod
     def _parse_max_repls(cls, v: int | str) -> int:
+        if isinstance(v, str) and v.strip() == "":
+            return os.cpu_count() or 1
+        return cast(int, v)
+
+    @field_validator("max_ast_jobs", mode="before")
+    @classmethod
+    def _parse_max_ast_jobs(cls, v: int | str) -> int:
         if isinstance(v, str) and v.strip() == "":
             return os.cpu_count() or 1
         return cast(int, v)

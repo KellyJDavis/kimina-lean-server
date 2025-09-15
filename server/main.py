@@ -11,6 +11,7 @@ from .__version__ import __version__
 from .db import db
 from .logger import setup_logging
 from .manager import Manager
+from .routers.ast import router as ast_router
 from .routers.backward import router as backward_router
 from .routers.check import router as check_router
 from .routers.health import router as health_router
@@ -64,6 +65,26 @@ def create_app(settings: Settings) -> FastAPI:
                         "}' | jq\n",
                         "  ",
                     )
+                    + textwrap.indent(
+                        "curl --request POST \\\n"
+                        "  --url http://localhost:8000/api/ast \\\n"
+                        "  --header 'Content-Type: application/json' \\\n"
+                        "  --data '{\\n"
+                        "    \\\"modules\\\": [\\\"Mathlib\\\"],\\n"
+                        "    \\\"one\\\": true,\\n"
+                        "    \\\"timeout\\\": 60\\n  }' | jq\\n",
+                        "  ",
+                    )
+                    + textwrap.indent(
+                        "curl --request POST \\\n"
+                        "  --url http://localhost:8000/api/ast_code \\\n"
+                        "  --header 'Content-Type: application/json' \\\n"
+                        "  --data '{\\n"
+                        "    \\\"code\\\": \\\"import Mathlib\\n#check Nat\\\",\\n"
+                        "    \\\"module\\\": \\\"User.Code\\\",\\n"
+                        "    \\\"timeout\\\": 60\\n  }' | jq\\n",
+                        "  ",
+                    )
                 ),
             ).start()
 
@@ -97,6 +118,11 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(
         backward_router,
         tags=["backward"],
+    )
+    app.include_router(
+        ast_router,
+        prefix="/api",
+        tags=["ast"],
     )
     return app
 

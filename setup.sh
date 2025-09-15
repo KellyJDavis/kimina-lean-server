@@ -4,6 +4,8 @@ set -euxo pipefail
 LEAN_SERVER_LEAN_VERSION="${LEAN_SERVER_LEAN_VERSION:-v4.15.0}"
 REPL_REPO_URL="${REPL_REPO_URL:-https://github.com/leanprover-community/repl.git}"
 REPL_BRANCH="${REPL_BRANCH:-$LEAN_SERVER_LEAN_VERSION}"
+AST_REPO_URL="${AST_REPO_URL:-https://github.com/KellyJDavis/ast_export.git}"
+AST_BRANCH="${AST_BRANCH:-$LEAN_SERVER_LEAN_VERSION}"
 MATHLIB_REPO_URL="${MATHLIB_REPO_URL:-https://github.com/leanprover-community/mathlib4.git}"
 MATHLIB_BRANCH="${MATHLIB_BRANCH:-$LEAN_SERVER_LEAN_VERSION}"
 
@@ -38,4 +40,5 @@ install_repo() {
 }
 
 install_repo repl "$REPL_REPO_URL" "$REPL_BRANCH" false
+install_repo ast_export "$AST_REPO_URL" "$AST_BRANCH" false
 install_repo mathlib4 "$MATHLIB_REPO_URL" "$MATHLIB_BRANCH" true

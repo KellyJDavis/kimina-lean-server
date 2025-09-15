@@ -11,8 +11,9 @@
     <a href="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml" rel="nofollow"><img alt="CI" src="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml/badge.svg" style="max-width:100%;"></a>
 </p>
 
-This project serves the [Lean REPL](https://github.com/leanprover-community/repl) using FastAPI. 
-It supports parallelization to check Lean 4 proofs at scale. 
+This project serves the [Lean REPL](https://github.com/leanprover-community/repl) and
+[Lean AST](https://github.com/KellyJDavis/ast_export) using FastAPI.  It supports parallelization
+to check Lean 4 proofs at scale.
 
 A Python SDK simplifies interaction with the server's API.
 
@@ -88,6 +89,36 @@ curl --request POST \
 
 Or use the client below.
 
+### AST endpoints
+
+Curl examples:
+
+```sh
+# Get AST for existing modules
+curl --request POST \
+  --url http://localhost/api/ast \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "modules": ["Mathlib", "Lean.Elab.Frontend"],
+    "one": true,
+    "timeout": 60
+  }' | jq
+
+# Get AST from raw code
+curl --request POST \
+  --url http://localhost/api/ast_code \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "code": "import Mathlib\n#check Nat",
+    "module": "User.Code",
+    "timeout": 60
+  }' | jq
+```
+
+Notes:
+- Avoid bare `Lean` as a module; use concrete modules like `Lean.Elab.Frontend`, `Init`, `Std`, or any `Mathlib.*`.
+- The raw-code endpoint creates a temporary module and uses the local `mathlib4` checkout for imports.
+
 ## Client
 
 From [PyPI](https://test.pypi.org/project/kimina-client/):
@@ -120,6 +151,8 @@ Or from source with `pip install -e .`
 | `LEAN_SERVER_INIT_REPLS`              | `{}`          | Map of header to REPL count to initialize with         |
 | `LEAN_SERVER_API_KEY`                 | `None`        | Optional API key for authentication                    |
 | `LEAN_SERVER_REPL_PATH`               | `repl/.lake/build/bin/repl` | Path to REPL directory, relative to workspace    |
+| `LEAN_SERVER_AST_EXPORT_BIN`          | `ast_export/.lake/build/bin/ast-export` | Path to AST exporter binary                      |
+| `LEAN_SERVER_AST_EXPORT_PROJECT_DIR`  | `ast_export`    | Path to AST exporter project directory                  |
 | `LEAN_SERVER_PROJECT_DIR`             | `mathlib4`    | Path to Lean 4 project directory, relative to workspace        |
 | `LEAN_SERVER_DATABASE_URL`            |               | URL for the database (if using one)                   |
 
@@ -202,7 +235,8 @@ An additional hook runs basic tests on push.
 > Use `--no-verify` to skip hooks on commit / push (but the CI runs them).
 
 
-Install [Lean 4](https://github.com/leanprover/lean4) and build the [repl](https://github.com/leanprover-community/repl) and [mathlib4](https://github.com/leanprover-community/mathlib4):
+Install [Lean 4](https://github.com/leanprover/lean4), build the [repl](https://github.com/leanprover-community/repl), [ast](https://github.com/KellyJDavis/ast_export),
+and [mathlib4](https://github.com/leanprover-community/mathlib4) libraries:
 ```sh
 bash setup.sh
 ```

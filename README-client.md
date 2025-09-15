@@ -16,6 +16,25 @@ client = KiminaClient()
 client.check("#check Nat")
 ```
 
+### AST endpoints
+
+```python
+from kimina_client import KiminaClient
+
+client = KiminaClient()
+
+# Get AST for existing modules
+mod_res = client.ast(["Mathlib", "Lean.Elab.Frontend"])  # POST /api/ast
+print(mod_res.results[0].module, mod_res.results[0].error)
+
+# Get AST from raw code
+code = """import Mathlib
+#check Nat
+"""
+code_res = client.ast_code(code, module="User.Code")  # POST /api/ast_code
+print(code_res.results[0].module, code_res.results[0].ast is not None)
+```
+
 ## Backward client
 
 ```python

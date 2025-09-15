@@ -86,6 +86,27 @@ class Snippet(BaseModel):
         return snip
 
 
+class AstModuleRequest(BaseModel):
+    modules: list[str]
+    one: bool = True
+    timeout: int = 60
+
+
+class AstModuleResult(BaseModel):
+    module: str
+    ast: dict[str, Any] | None = None
+    error: str | None = None
+
+
+class AstModuleResponse(BaseModel):
+    results: list[AstModuleResult]
+
+class AstCodeRequest(BaseModel):
+    code: str
+    module: str = "User.Code"
+    timeout: int = 60
+
+
 # The classes below map to the REPL/JSON.lean in the Lean REPL repository:
 # see https://github.com/leanprover-community/repl
 
