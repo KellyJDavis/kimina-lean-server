@@ -4,6 +4,9 @@ from typing import Any
 
 from .async_client import AsyncKiminaClient
 from .models import (
+    AstCodeRequest,
+    AstModuleRequest,
+    AstModuleResponse,
     BackwardResponse,
     CheckRequest,
     CheckResponse,
@@ -28,6 +31,9 @@ from .sync_client import KiminaClient
 
 __all__ = [
     "AsyncKiminaClient",
+    "AstCodeRequest",
+    "AstModuleRequest",
+    "AstModuleResponse",
     "BackwardResponse",
     "ReplRequest",
     "ReplResponse",

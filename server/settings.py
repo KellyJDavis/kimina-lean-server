@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     lean_version: str = "v4.15.0"
     repl_path: Path = BASE_DIR / "repl/.lake/build/bin/repl"
+    ast_export_bin: Path = BASE_DIR / "ast_export/.lake/build/bin/ast-export"
     ast_export_project_dir: Path = BASE_DIR / "ast_export"
     project_dir: Path = BASE_DIR / "mathlib4"
 

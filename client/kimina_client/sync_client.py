@@ -15,7 +15,16 @@ from tenacity import (
 from tqdm import tqdm
 
 from .base import BaseKimina
-from .models import CheckRequest, CheckResponse, Infotree, ReplResponse, Snippet
+from .models import (
+    AstCodeRequest,
+    AstModuleRequest,
+    AstModuleResponse,
+    CheckRequest,
+    CheckResponse,
+    Infotree,
+    ReplResponse,
+    Snippet,
+)
 from .utils import build_log, find_code_column, find_id_column
 
 logger = logging.getLogger("kimina-client")
@@ -177,6 +186,20 @@ class KiminaClient(BaseKimina):
         url = self.build_url("/health")
         resp = self._query(url, method="GET")
         return resp  # TODO: create status object to cast automatically
+
+    def ast(self, modules: str | list[str], one: bool = True, timeout: int = 60) -> AstModuleResponse:
+        if isinstance(modules, str):
+            modules = [modules]
+        url = self.build_url("/api/ast")
+        payload = AstModuleRequest(modules=modules, one=one, timeout=timeout).model_dump()
+        resp = self._query(url, payload)
+        return self.handle(resp, AstModuleResponse)
+
+    def ast_code(self, code: str, module: str = "User.Code", timeout: int = 60) -> AstModuleResponse:
+        url = self.build_url("/api/ast_code")
+        payload = AstCodeRequest(code=code, module=module, timeout=timeout).model_dump()
+        resp = self._query(url, payload)
+        return self.handle(resp, AstModuleResponse)
 
     def test(self) -> None:
         """

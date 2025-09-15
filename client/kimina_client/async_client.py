@@ -15,7 +15,16 @@ from tenacity import (
 from tqdm.asyncio import tqdm_asyncio
 
 from .base import BaseKimina
-from .models import CheckRequest, CheckResponse, Infotree, ReplResponse, Snippet
+from .models import (
+    AstCodeRequest,
+    AstModuleRequest,
+    AstModuleResponse,
+    CheckRequest,
+    CheckResponse,
+    Infotree,
+    ReplResponse,
+    Snippet,
+)
 from .utils import build_log, find_code_column, find_id_column
 
 logger = logging.getLogger("kimina-client")
@@ -155,6 +164,20 @@ class AsyncKiminaClient(BaseKimina):
     async def health(self) -> Any:
         url = self.build_url("/health")
         return await self._query(url, method="GET")
+
+    async def ast(self, modules: str | list[str], one: bool = True, timeout: int = 60) -> AstModuleResponse:
+        if isinstance(modules, str):
+            modules = [modules]
+        url = self.build_url("/api/ast")
+        payload = AstModuleRequest(modules=modules, one=one, timeout=timeout).model_dump()
+        resp = await self._query(url, payload)
+        return self.handle(resp, AstModuleResponse)
+
+    async def ast_code(self, code: str, module: str = "User.Code", timeout: int = 60) -> AstModuleResponse:
+        url = self.build_url("/api/ast_code")
+        payload = AstCodeRequest(code=code, module=module, timeout=timeout).model_dump()
+        resp = await self._query(url, payload)
+        return self.handle(resp, AstModuleResponse)
 
     async def test(self) -> None:
         logger.info("Testing with `#check Nat`...")
