@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from typing import Any
+from .models import AstModuleRequest, AstModuleResponse
 
 import httpx
 from tenacity import (
@@ -40,6 +41,18 @@ class AsyncKiminaClient(BaseKimina):
             headers=self.headers,
             timeout=httpx.Timeout(self.http_timeout, read=self.http_timeout),
         )
+
+    async def ast(
+        self, modules: str | list[str],
+        one: bool = True,
+        timeout: int = 60
+    ) -> AstModuleResponse:
+        if isinstance(modules, str):
+            modules = [modules]
+        url = self.build_url("/api/ast")
+        payload = AstModuleRequest(modules=modules, one=one, timeout=timeout).model_dump()
+        resp = await self._query(url, payload)
+        return self.handle(resp, AstModuleResponse)
 
     async def check(
         self,

@@ -2,6 +2,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
+from .models import AstModuleRequest, AstModuleResponse
 
 import httpx
 from tenacity import (
@@ -36,6 +37,18 @@ class KiminaClient(BaseKimina):
             http_timeout=http_timeout,
             n_retries=n_retries,
         )
+
+    def ast(
+        self, modules: str | list[str],
+        one: bool = True,
+        timeout: int = 60
+    ) -> AstModuleResponse:
+        if isinstance(modules, str):
+            modules = [modules]
+        url = self.build_url("/api/ast")
+        payload = AstModuleRequest(modules=modules, one=one, timeout=timeout).model_dump()
+        resp = self._query(url, payload)
+        return self.handle(resp, AstModuleResponse)
 
     def check(
         self,

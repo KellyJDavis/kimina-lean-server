@@ -11,6 +11,7 @@ from .__version__ import __version__
 from .db import db
 from .logger import setup_logging
 from .manager import Manager
+from .routers.ast import router as ast_router
 from .routers.backward import router as backward_router
 from .routers.check import router as check_router
 from .routers.health import router as health_router
@@ -97,6 +98,11 @@ def create_app(settings: Settings) -> FastAPI:
     app.include_router(
         backward_router,
         tags=["backward"],
+    )
+    app.include_router(
+        ast_router,
+        prefix="/api",
+        tags=["ast"],
     )
     return app
 

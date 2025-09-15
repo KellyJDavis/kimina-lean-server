@@ -10,6 +10,7 @@ __pycache__/
 dist/
 
 # Lean dependencies
+ast_export/
 mathlib4/
 repl/
 
