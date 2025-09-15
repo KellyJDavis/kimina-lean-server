@@ -5,6 +5,7 @@ import re
 import tempfile
 from pathlib import Path
 from typing import Any
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -26,6 +27,8 @@ class AstModuleResult(BaseModel):
     module: str
     ast: dict[str, Any] | None = None
     error: str | None = None
+    time: float = 0.0
+    diagnostics: dict[str, Any] | None = None
 
 class AstModuleResponse(BaseModel):
     results: list[AstModuleResult]
@@ -42,6 +45,7 @@ async def run_ast_one(module: str, one: bool, timeout: float) -> AstModuleResult
     args = ["lake", "exe", "ast-export"] + (["--one", module] if one else [module])
     try:
         logger.info("[AST] Exporting module: {} (one={})", module, one)
+        t0 = time.perf_counter()
         proc = await asyncio.create_subprocess_exec(
             *args,
             cwd=str(cwd),
@@ -53,21 +57,22 @@ async def run_ast_one(module: str, one: bool, timeout: float) -> AstModuleResult
         except asyncio.TimeoutError:
             proc.kill()
             logger.error("[AST] Timeout exporting module {} after {}s", module, timeout)
-            return AstModuleResult(module=module, error=f"timed out after {timeout}s")
+            return AstModuleResult(module=module, error=f"timed out after {timeout}s", time=round(time.perf_counter()-t0,6))
         if proc.returncode != 0:
             err = stderr_bytes.decode()
             logger.error("[AST] Export failed for module {}: {}", module, err)
-            return AstModuleResult(module=module, error=err or "ast-export failed")
+            return AstModuleResult(module=module, error=err or "ast-export failed", time=round(time.perf_counter()-t0,6))
         # For --one, file path is deterministic:
         rel = module.replace(".", "/") + ".out.json"
         out_path = Path(cwd) / ".lake/build/lib" / rel
         try:
-            data = json.loads(out_path.read_text(encoding="utf-8"))
+            raw = out_path.read_text(encoding="utf-8")
+            data = json.loads(raw)
             logger.info("[AST] Success for module {}", module)
-            return AstModuleResult(module=module, ast=data)
+            return AstModuleResult(module=module, ast=data, time=round(time.perf_counter()-t0,6), diagnostics={"ast_bytes": len(raw)})
         except Exception as e:
             logger.error("[AST] Failed to read AST for module {}: {}", module, e)
-            return AstModuleResult(module=module, error=f"failed to read AST: {e}")
+            return AstModuleResult(module=module, error=f"failed to read AST: {e}", time=round(time.perf_counter()-t0,6))
     except Exception as e:
         logger.exception("[AST] Unexpected error for module {}: {}", module, e)
         return AstModuleResult(module=module, error=str(e))
@@ -114,20 +119,44 @@ async def ast_from_code(body: AstCodeRequest, manager: Manager = Depends(get_man
         # Ensure the exporter output directory exists
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Extend source search path with our temp src and the repo's mathlib root
+        # Extend source search path with our temp src and the repo's mathlib root and its dependencies
         env = os.environ.copy()
-        src_paths = [str(src_dir)]
-        # Allow `import Mathlib ...` directly from the local checkout
-        src_paths.append(str(settings.project_dir))
+        src_paths = [str(src_dir), str(settings.project_dir)]
+        packages_root = settings.project_dir / ".lake" / "packages"
+        if packages_root.is_dir():
+            for pkg in packages_root.iterdir():
+                pkg_src = pkg / "src"
+                if pkg_src.is_dir():
+                    src_paths.append(str(pkg_src))
         env["LEAN_SRC_PATH"] = os.pathsep.join(src_paths)
 
+        # Also add compiled libraries (.olean) so imported notations/macros are available during header processing
+        lib_paths: list[str] = [str(settings.project_dir / ".lake" / "build" / "lib")]
+        if packages_root.is_dir():
+            for pkg in packages_root.iterdir():
+                pkg_lib = pkg / ".lake" / "build" / "lib"
+                if pkg_lib.is_dir():
+                    lib_paths.append(str(pkg_lib))
+        # Prepend any existing LEAN_PATH to preserve sysroot paths if set
+        existing_lean_path = env.get("LEAN_PATH")
+        lean_path = os.pathsep.join(lib_paths + ([existing_lean_path] if existing_lean_path else []))
+        env["LEAN_PATH"] = lean_path
+
         logger.info("[AST] Exporting from code for module {} (len={})", body.module, len(body.code))
-        # Run the ast-export binary in the temp directory
+        # Ensure output directory exists inside ast_export project build dir
+        rel = Path(*body.module.split("."))
+        out_dir = settings.ast_export_project_dir / ".lake/build/lib" / rel.parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # Run ast-export via lake in the ast_export project so Lake resolves deps
         async with manager.ast_semaphore:
+            t0 = time.perf_counter()
             proc = await asyncio.create_subprocess_exec(
-                str(settings.ast_export_bin),
-                "--one", body.module,
-                cwd=str(tmpdir),
+                "lake",
+                "exe",
+                "ast-export",
+                "--one",
+                body.module,
+                cwd=str(settings.ast_export_project_dir),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
@@ -137,20 +166,23 @@ async def ast_from_code(body: AstCodeRequest, manager: Manager = Depends(get_man
         except asyncio.TimeoutError:
             proc.kill()
             logger.error("[AST] Timeout exporting code module {} after {}s", body.module, body.timeout)
-            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=f"timed out after {body.timeout}s")])
+            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=f"timed out after {body.timeout}s", time=round(time.perf_counter()-t0,6))])
 
         if proc.returncode != 0:
             err = stderr_bytes.decode()
             logger.error("[AST] Export from code failed for module {}: {}", body.module, err)
-            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=(err or "ast-export failed"))])
+            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=(err or "ast-export failed"), time=round(time.perf_counter()-t0,6))])
 
         try:
-            data = json.loads(out_path.read_text(encoding="utf-8"))
+            # Output is written under the ast_export project build dir when using lake
+            out_path = settings.ast_export_project_dir / ".lake/build/lib" / f"{rel}.out.json"
+            raw = out_path.read_text(encoding="utf-8")
+            data = json.loads(raw)
             logger.info("[AST] Success for code module {}", body.module)
-            return AstModuleResponse(results=[AstModuleResult(module=body.module, ast=data)])
+            return AstModuleResponse(results=[AstModuleResult(module=body.module, ast=data, time=round(time.perf_counter()-t0,6), diagnostics={"ast_bytes": len(raw)})])
         except Exception as e:
             logger.error("[AST] Failed to read AST for code module {}: {}", body.module, e)
-            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=f"failed to read AST: {e}")])
+            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=f"failed to read AST: {e}", time=round(time.perf_counter()-t0,6))])
     finally:
         # Best-effort cleanup
         try:
