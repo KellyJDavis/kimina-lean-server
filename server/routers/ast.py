@@ -10,6 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from ..auth import require_key
 from ..settings import settings
+from ..manager import Manager
+from .check import get_manager
+from loguru import logger
 
 router = APIRouter()
 MODULE_RE = re.compile(r"^[A-Za-z0-9_.]+$")
@@ -38,6 +41,7 @@ async def run_ast_one(module: str, one: bool, timeout: float) -> AstModuleResult
     cwd = settings.ast_export_project_dir
     args = ["lake", "exe", "ast-export"] + (["--one", module] if one else [module])
     try:
+        logger.info("[AST] Exporting module: {} (one={})", module, one)
         proc = await asyncio.create_subprocess_exec(
             *args,
             cwd=str(cwd),
@@ -48,25 +52,30 @@ async def run_ast_one(module: str, one: bool, timeout: float) -> AstModuleResult
             _stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             proc.kill()
+            logger.error("[AST] Timeout exporting module {} after {}s", module, timeout)
             return AstModuleResult(module=module, error=f"timed out after {timeout}s")
         if proc.returncode != 0:
-            return AstModuleResult(module=module, error=stderr_bytes.decode() or "ast-export failed")
+            err = stderr_bytes.decode()
+            logger.error("[AST] Export failed for module {}: {}", module, err)
+            return AstModuleResult(module=module, error=err or "ast-export failed")
         # For --one, file path is deterministic:
         rel = module.replace(".", "/") + ".out.json"
         out_path = Path(cwd) / ".lake/build/lib" / rel
         try:
             data = json.loads(out_path.read_text(encoding="utf-8"))
+            logger.info("[AST] Success for module {}", module)
             return AstModuleResult(module=module, ast=data)
         except Exception as e:
+            logger.error("[AST] Failed to read AST for module {}: {}", module, e)
             return AstModuleResult(module=module, error=f"failed to read AST: {e}")
     except Exception as e:
+        logger.exception("[AST] Unexpected error for module {}: {}", module, e)
         return AstModuleResult(module=module, error=str(e))
 
 @router.post("/ast", response_model=AstModuleResponse, response_model_exclude_none=True)
-async def ast_modules(body: AstModuleRequest, _: str = Depends(require_key)) -> AstModuleResponse:
-    sem = asyncio.Semaphore(4)
+async def ast_modules(body: AstModuleRequest, manager: Manager = Depends(get_manager), _: str = Depends(require_key)) -> AstModuleResponse:
     async def worker(m: str) -> AstModuleResult:
-        async with sem:
+        async with manager.ast_semaphore:
             return await run_ast_one(m, body.one, float(body.timeout))
     results = await asyncio.gather(*(worker(m) for m in body.modules))
     return AstModuleResponse(results=list(results))
@@ -76,13 +85,15 @@ async def ast_module(
     module: str = Query(..., description="Lean module name"),
     one: bool = Query(True),
     timeout: int = Query(60),
+    manager: Manager = Depends(get_manager),
     _: str = Depends(require_key),
 ) -> AstModuleResponse:
-    result = await run_ast_one(module, one, float(timeout))
+    async with manager.ast_semaphore:
+        result = await run_ast_one(module, one, float(timeout))
     return AstModuleResponse(results=[result])
 
 @router.post("/ast_code", response_model=AstModuleResponse, response_model_exclude_none=True)
-async def ast_from_code(body: AstCodeRequest, _: str = Depends(require_key)) -> AstModuleResponse:
+async def ast_from_code(body: AstCodeRequest, manager: Manager = Depends(get_manager), _: str = Depends(require_key)) -> AstModuleResponse:
     if not MODULE_RE.match(body.module):
         raise HTTPException(400, "Invalid module name")
     if not settings.ast_export_bin.exists():
@@ -110,28 +121,35 @@ async def ast_from_code(body: AstCodeRequest, _: str = Depends(require_key)) -> 
         src_paths.append(str(settings.project_dir))
         env["LEAN_SRC_PATH"] = os.pathsep.join(src_paths)
 
+        logger.info("[AST] Exporting from code for module {} (len={})", body.module, len(body.code))
         # Run the ast-export binary in the temp directory
-        proc = await asyncio.create_subprocess_exec(
-            str(settings.ast_export_bin),
-            "--one", body.module,
-            cwd=str(tmpdir),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
+        async with manager.ast_semaphore:
+            proc = await asyncio.create_subprocess_exec(
+                str(settings.ast_export_bin),
+                "--one", body.module,
+                cwd=str(tmpdir),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
         try:
             _stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=float(body.timeout))
         except asyncio.TimeoutError:
             proc.kill()
+            logger.error("[AST] Timeout exporting code module {} after {}s", body.module, body.timeout)
             return AstModuleResponse(results=[AstModuleResult(module=body.module, error=f"timed out after {body.timeout}s")])
 
         if proc.returncode != 0:
-            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=(stderr_bytes.decode() or "ast-export failed"))])
+            err = stderr_bytes.decode()
+            logger.error("[AST] Export from code failed for module {}: {}", body.module, err)
+            return AstModuleResponse(results=[AstModuleResult(module=body.module, error=(err or "ast-export failed"))])
 
         try:
             data = json.loads(out_path.read_text(encoding="utf-8"))
+            logger.info("[AST] Success for code module {}", body.module)
             return AstModuleResponse(results=[AstModuleResult(module=body.module, ast=data)])
         except Exception as e:
+            logger.error("[AST] Failed to read AST for code module {}: {}", body.module, e)
             return AstModuleResponse(results=[AstModuleResult(module=body.module, error=f"failed to read AST: {e}")])
     finally:
         # Best-effort cleanup

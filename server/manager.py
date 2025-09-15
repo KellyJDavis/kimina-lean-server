@@ -22,11 +22,13 @@ class Manager:
         max_repl_uses: int = settings.max_repl_uses,
         max_repl_mem: int = settings.max_repl_mem,
         init_repls: dict[str, int] = settings.init_repls,
+        max_ast_jobs: int = settings.max_ast_jobs,
     ) -> None:
         self.max_repls = max_repls
         self.max_repl_uses = max_repl_uses
         self.max_repl_mem = max_repl_mem
         self.init_repls = init_repls
+        self.ast_semaphore = asyncio.Semaphore(max_ast_jobs)
 
         self._lock = asyncio.Lock()
         self._cond = asyncio.Condition(self._lock)

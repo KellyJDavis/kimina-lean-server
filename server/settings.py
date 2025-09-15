@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     max_repl_uses: int = -1
     max_repl_mem: int = 8
     max_wait: int = 60
+    max_ast_jobs: int = max((os.cpu_count() or 1) - 1, 1)
 
     init_repls: dict[str, int] = {}
 
@@ -58,6 +59,13 @@ class Settings(BaseSettings):
     @field_validator("max_repls", mode="before")
     @classmethod
     def _parse_max_repls(cls, v: int | str) -> int:
+        if isinstance(v, str) and v.strip() == "":
+            return os.cpu_count() or 1
+        return cast(int, v)
+
+    @field_validator("max_ast_jobs", mode="before")
+    @classmethod
+    def _parse_max_ast_jobs(cls, v: int | str) -> int:
         if isinstance(v, str) and v.strip() == "":
             return os.cpu_count() or 1
         return cast(int, v)

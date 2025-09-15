@@ -65,6 +65,26 @@ def create_app(settings: Settings) -> FastAPI:
                         "}' | jq\n",
                         "  ",
                     )
+                    + textwrap.indent(
+                        "curl --request POST \\\n"
+                        "  --url http://localhost:8000/api/ast \\\n"
+                        "  --header 'Content-Type: application/json' \\\n"
+                        "  --data '{\\n"
+                        "    \\\"modules\\\": [\\\"Mathlib\\\"],\\n"
+                        "    \\\"one\\\": true,\\n"
+                        "    \\\"timeout\\\": 60\\n  }' | jq\\n",
+                        "  ",
+                    )
+                    + textwrap.indent(
+                        "curl --request POST \\\n"
+                        "  --url http://localhost:8000/api/ast_code \\\n"
+                        "  --header 'Content-Type: application/json' \\\n"
+                        "  --data '{\\n"
+                        "    \\\"code\\\": \\\"import Mathlib\\n#check Nat\\\",\\n"
+                        "    \\\"module\\\": \\\"User.Code\\\",\\n"
+                        "    \\\"timeout\\\": 60\\n  }' | jq\\n",
+                        "  ",
+                    )
                 ),
             ).start()
 
