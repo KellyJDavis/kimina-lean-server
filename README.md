@@ -11,8 +11,9 @@
     <a href="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml" rel="nofollow"><img alt="CI" src="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml/badge.svg" style="max-width:100%;"></a>
 </p>
 
-This project serves the [Lean REPL](https://github.com/leanprover-community/repl) using FastAPI. 
-It supports parallelization to check Lean 4 proofs at scale. 
+This project serves the [Lean REPL](https://github.com/leanprover-community/repl) and
+[Lean AST](https://github.com/KellyJDavis/ast_export) using FastAPI.  It supports parallelization
+to check Lean 4 proofs at scale.
 
 A Python SDK simplifies interaction with the server's API.
 
@@ -202,7 +203,8 @@ An additional hook runs basic tests on push.
 > Use `--no-verify` to skip hooks on commit / push (but the CI runs them).
 
 
-Install [Lean 4](https://github.com/leanprover/lean4) and build the [repl](https://github.com/leanprover-community/repl) and [mathlib4](https://github.com/leanprover-community/mathlib4):
+Install [Lean 4](https://github.com/leanprover/lean4), build the [repl](https://github.com/leanprover-community/repl), [ast](https://github.com/KellyJDavis/ast_export),
+and [mathlib4](https://github.com/leanprover-community/mathlib4) libraries:
 ```sh
 bash setup.sh
 ```
