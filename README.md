@@ -89,6 +89,36 @@ curl --request POST \
 
 Or use the client below.
 
+### AST endpoints
+
+Curl examples:
+
+```sh
+# Get AST for existing modules
+curl --request POST \
+  --url http://localhost/api/ast \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "modules": ["Mathlib", "Lean.Elab.Frontend"],
+    "one": true,
+    "timeout": 60
+  }' | jq
+
+# Get AST from raw code
+curl --request POST \
+  --url http://localhost/api/ast_code \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "code": "import Mathlib\n#check Nat",
+    "module": "User.Code",
+    "timeout": 60
+  }' | jq
+```
+
+Notes:
+- Avoid bare `Lean` as a module; use concrete modules like `Lean.Elab.Frontend`, `Init`, `Std`, or any `Mathlib.*`.
+- The raw-code endpoint creates a temporary module and uses the local `mathlib4` checkout for imports.
+
 ## Client
 
 From [PyPI](https://test.pypi.org/project/kimina-client/):
