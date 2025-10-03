@@ -55,8 +55,8 @@ class Manager:
                 initialized_repls.append(await self.get_repl(header=header))
 
         async def _prep_and_release(repl: Repl) -> None:
-            # All initialized imports should finish in 60 seconds.
-            await self.prep(repl, snippet_id="init", timeout=60, debug=False)
+            # All initialized imports should finish in 3600 seconds.
+            await self.prep(repl, snippet_id="init", timeout=3600, debug=False)
             await self.release_repl(repl)
 
         await asyncio.gather(*(_prep_and_release(r) for r in initialized_repls))

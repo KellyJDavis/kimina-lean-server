@@ -21,7 +21,7 @@ MODULE_RE = re.compile(r"^[A-Za-z0-9_.]+$")
 class AstModuleRequest(BaseModel):
     modules: list[str] = Field(..., description="Lean module names, e.g., 'Lean' or 'Mathlib.Data.List.Basic'")
     one: bool = True
-    timeout: int = 60
+    timeout: int = 3600
 
 class AstModuleResult(BaseModel):
     module: str
@@ -36,7 +36,7 @@ class AstModuleResponse(BaseModel):
 class AstCodeRequest(BaseModel):
     code: str = Field(..., description="Lean code (can include import lines)")
     module: str = Field("User.Code", description="Virtual module name to assign")
-    timeout: int = 60
+    timeout: int = 3600
 
 async def run_ast_one(module: str, one: bool, timeout: float) -> AstModuleResult:
     if not MODULE_RE.match(module):
@@ -89,7 +89,7 @@ async def ast_modules(body: AstModuleRequest, manager: Manager = Depends(get_man
 async def ast_module(
     module: str = Query(..., description="Lean module name"),
     one: bool = Query(True),
-    timeout: int = Query(60),
+    timeout: int = Query(3600),
     manager: Manager = Depends(get_manager),
     _: str = Depends(require_key),
 ) -> AstModuleResponse:

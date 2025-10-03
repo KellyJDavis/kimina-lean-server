@@ -72,7 +72,7 @@ def create_app(settings: Settings) -> FastAPI:
                         "  --data '{\\n"
                         "    \\\"modules\\\": [\\\"Mathlib\\\"],\\n"
                         "    \\\"one\\\": true,\\n"
-                        "    \\\"timeout\\\": 60\\n  }' | jq\\n",
+                        "    \\\"timeout\\\": 3600\\n  }' | jq\\n",
                         "  ",
                     )
                     + textwrap.indent(
@@ -82,7 +82,7 @@ def create_app(settings: Settings) -> FastAPI:
                         "  --data '{\\n"
                         "    \\\"code\\\": \\\"import Mathlib\\n#check Nat\\\",\\n"
                         "    \\\"module\\\": \\\"User.Code\\\",\\n"
-                        "    \\\"timeout\\\": 60\\n  }' | jq\\n",
+                        "    \\\"timeout\\\": 3600\\n  }' | jq\\n",
                         "  ",
                     )
                 ),
