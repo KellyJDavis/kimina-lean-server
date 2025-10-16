@@ -2,6 +2,11 @@
 
 Client SDK to interact with Kimina Lean server. 
 
+Install:
+```sh
+pip install kimina-ast-client
+```
+
 Example use:
 ```python
 from kimina_client import KiminaClient

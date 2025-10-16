@@ -7,7 +7,7 @@
 
 <p align="center">
     <a href="https://projectnumina.ai/"><img alt="Project Numina" src="images/logo_projectNumina_light.png" style="height:20px; width:auto; vertical-align:middle; border-radius:4px;"></a>
-    <a href="https://pypi.org/project/kimina-client" rel="nofollow"><img alt="PyPI version" src="https://img.shields.io/pypi/v/kimina-client.svg" style="max-width:100%;"></a>
+    <a href="https://pypi.org/project/kimina-ast-client" rel="nofollow"><img alt="PyPI version" src="https://img.shields.io/pypi/v/kimina-ast-client.svg" style="max-width:100%;"></a>
     <a href="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml" rel="nofollow"><img alt="CI" src="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml/badge.svg" style="max-width:100%;"></a>
 </p>
 
@@ -121,9 +121,9 @@ Notes:
 
 ## Client
 
-From [PyPI](https://test.pypi.org/project/kimina-client/):
+From [PyPI](https://test.pypi.org/project/kimina-ast-client/):
 ```sh
-pip install kimina-client
+pip install kimina-ast-client
 ```
 
 Example use:
