@@ -1,6 +1,6 @@
 [project]
-name = "kimina-client"
-version = "0.2.1"
+name = "kimina-ast-client"
+version = "0.2.2"
 authors = [
   { name = "Kimi Team - Project Numina"},
   { email = "contact@projectnumina.com" },
