@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from types import FrameType
 from typing import Any
@@ -27,6 +28,11 @@ class InterceptHandler(logging.Handler):
 
 def run_server() -> None:
     """Run the FastAPI server."""
+    # Validate paths when server actually starts (not during import)
+    # This allows tests to import the module without paths existing
+    if not os.getenv("LEAN_SERVER_SKIP_VALIDATION"):
+        settings._validate_paths()
+    
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
