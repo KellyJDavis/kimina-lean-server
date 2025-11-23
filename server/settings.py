@@ -144,10 +144,10 @@ class Settings(BaseSettings):
         # Validate paths exist (with helpful error messages)
         # Skip validation in test environments or if explicitly disabled
         if not os.getenv("LEAN_SERVER_SKIP_VALIDATION") and "pytest" not in sys.modules:
-            self._validate_paths()
+            self.validate_paths()
         return self
 
-    def _validate_paths(self) -> None:
+    def validate_paths(self) -> None:
         """Validate that required paths exist, with helpful error messages."""
         # After model_validator, these should never be None, but type checker needs help
         assert self.repl_path is not None, "repl_path should be set by model_validator"

@@ -31,7 +31,7 @@ def run_server() -> None:
     # Validate paths when server actually starts (not during import)
     # This allows tests to import the module without paths existing
     if not os.getenv("LEAN_SERVER_SKIP_VALIDATION"):
-        settings._validate_paths()
+        settings.validate_paths()
     
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
