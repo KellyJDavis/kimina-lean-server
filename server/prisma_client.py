@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -46,7 +47,7 @@ def _generate_prisma_client() -> None:
         ) from exc
 
 
-def _import_prisma() -> "Prisma":
+def _import_prisma() -> Any:
     """Import Prisma client, generating it first if necessary."""
     try:
         from prisma import Prisma  # type: ignore
@@ -63,4 +64,4 @@ def _import_prisma() -> "Prisma":
     return Prisma()
 
 
-prisma = _import_prisma()
+prisma: Any = _import_prisma()
