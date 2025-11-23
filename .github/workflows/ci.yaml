@@ -66,6 +66,9 @@ jobs:
         run: which lake
 
       - name: Run tests
+        env:
+          # Skip path validation during tests since setup.sh may not have run yet
+          LEAN_SERVER_SKIP_VALIDATION: 1
         run: uv run pytest
 
       - name: Run performance tests

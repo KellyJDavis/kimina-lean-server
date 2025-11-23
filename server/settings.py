@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from enum import Enum
 from pathlib import Path
 from typing import cast
@@ -141,7 +142,9 @@ class Settings(BaseSettings):
             self.project_dir = base_dir / "mathlib4"
 
         # Validate paths exist (with helpful error messages)
-        self._validate_paths()
+        # Skip validation in test environments or if explicitly disabled
+        if not os.getenv("LEAN_SERVER_SKIP_VALIDATION") and "pytest" not in sys.modules:
+            self._validate_paths()
         return self
 
     def _validate_paths(self) -> None:
