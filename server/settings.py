@@ -146,8 +146,6 @@ class Settings(BaseSettings):
 
     def _validate_paths(self) -> None:
         """Validate that required paths exist, with helpful error messages."""
-        missing_paths = []
-
         # After model_validator, these should never be None, but type checker needs help
         assert self.repl_path is not None, "repl_path should be set by model_validator"
         assert self.ast_export_bin is not None, (
@@ -159,6 +157,8 @@ class Settings(BaseSettings):
         assert self.project_dir is not None, (
             "project_dir should be set by model_validator"
         )
+
+        missing_paths: list[tuple[str, Path]] = []
 
         if not self.repl_path.exists():
             missing_paths.append(("REPL", self.repl_path))
