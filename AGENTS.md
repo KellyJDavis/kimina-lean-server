@@ -1,5 +1,8 @@
 # Contributor Guide
 
+> [!NOTE]
+> This guide is for contributors developing from source. End users can install the server via PyPI: `pip install kimina-ast-server` (see [README.md](./README.md#install-from-pypi-recommended)).
+
 ## Dev Environment Tips
 - Start by copying the environment variables with `cp .env.template .env`
 - Use uv for most commands (add a dependency, run python) to ensure you have the proper dependencies: https://docs.astral.sh/uv/

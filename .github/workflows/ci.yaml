@@ -30,7 +30,9 @@ jobs:
       - name: "Set up Python"
         uses: actions/setup-python@v5
         with:
-          python-version-file: "pyproject.toml"
+          # Use Python 3.13 instead of 3.14 to ensure pyarrow wheels are available
+          # Python 3.14 is very new and may not have pre-built wheels for all packages
+          python-version: "3.13"
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
@@ -64,6 +66,9 @@ jobs:
         run: which lake
 
       - name: Run tests
+        env:
+          # Skip path validation during tests since setup.sh may not have run yet
+          LEAN_SERVER_SKIP_VALIDATION: 1
         run: uv run pytest
 
       - name: Run performance tests
