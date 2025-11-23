@@ -1,26 +1,29 @@
 from __future__ import annotations
 
+import importlib
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
 
 def _prisma_schema_path() -> Path:
     """Return the absolute path to the packaged Prisma schema."""
-    # `server` package lives at <site-packages>/server/
-    # The schema is packaged under <site-packages>/prisma/schema.prisma
     pkg_root = Path(__file__).resolve().parent.parent
-    schema = pkg_root / "prisma" / "schema.prisma"
-    if not schema.exists():
-        raise RuntimeError(
-            f"Could not locate Prisma schema at '{schema}'. "
-            "Please ensure the package was installed correctly."
-        )
-    return schema
+    schema_candidates = [
+        pkg_root / "server" / "prisma" / "schema.prisma",
+        pkg_root / "prisma" / "schema.prisma",
+        Path(__file__).resolve().parent.parent / "prisma" / "schema.prisma",
+    ]
+    for schema in schema_candidates:
+        if schema.exists():
+            return schema
+    raise RuntimeError(
+        "Could not locate Prisma schema in the installed package. "
+        "Please reinstall `kimina-ast-server` or file an issue."
+    )
 
 
 def _generate_prisma_client() -> None:
@@ -38,8 +41,8 @@ def _generate_prisma_client() -> None:
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         raise RuntimeError(
             "Failed to generate Prisma client. "
-            "Ensure the 'prisma' package is installed and accessible. "
-            f"Original error: {exc}"
+            "Ensure the 'prisma' CLI is installed (pip install prisma) "
+            f"and accessible in the current environment. Original error: {exc}"
         ) from exc
 
 
@@ -51,6 +54,9 @@ def _import_prisma() -> "Prisma":
         message = str(exc)
         if "Client hasn't been generated yet" in message:
             _generate_prisma_client()
+            import prisma as prisma_module  # type: ignore
+
+            importlib.reload(prisma_module)
             from prisma import Prisma  # type: ignore
         else:
             raise
