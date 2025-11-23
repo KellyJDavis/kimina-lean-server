@@ -32,22 +32,11 @@ jobs:
         with:
           python-version-file: "pyproject.toml"
 
-      - name: Install system dependencies for pyarrow
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            software-properties-common
-          # Add Apache Arrow PPA for Arrow C++ libraries
-          sudo add-apt-repository -y ppa:apache/arrow
-          sudo apt-get update
-          sudo apt-get install -y \
-            libarrow-dev \
-            libparquet-dev \
-            cmake \
-            pkg-config \
-            build-essential
-
       - name: Install the project
+        env:
+          # Prefer pre-built wheels for pyarrow (which bundle Arrow C++ libraries)
+          # This avoids needing to build from source or install system Arrow libraries
+          UV_PREFER_BINARY: 1
         run: uv sync --locked --all-extras --dev
 
       - name: Generate prisma types
