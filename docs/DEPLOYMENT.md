@@ -1,5 +1,8 @@
 # Guide to deploy on Google Cloud
 
+> [!NOTE]
+> This guide covers Docker-based deployment on Google Cloud. For local development or simpler deployments, consider using the [PyPI package](../README.md#install-from-pypi-recommended) (`pip install kimina-ast-server`).
+
 ## Why not Cloud Run?
 
 This here is a guide to help you deploy this Lean server on Google Cloud
