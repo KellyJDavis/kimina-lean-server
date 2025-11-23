@@ -75,7 +75,7 @@ def check_prerequisites() -> tuple[bool, list[str]]:
         (all_available, missing_tools)
     """
     required_tools = ["curl", "git"]
-    missing = []
+    missing: list[str] = []
     
     for tool in required_tools:
         result = subprocess.run(
@@ -112,10 +112,12 @@ def setup_workspace(
     # Determine workspace location
     if workspace:
         workspace_path = Path(workspace).expanduser().resolve()
-    elif os.getenv("LEAN_SERVER_WORKSPACE"):
-        workspace_path = Path(os.getenv("LEAN_SERVER_WORKSPACE")).expanduser().resolve()
     else:
-        workspace_path = Path.cwd()
+        workspace_env = os.getenv("LEAN_SERVER_WORKSPACE")
+        if workspace_env:
+            workspace_path = Path(workspace_env).expanduser().resolve()
+        else:
+            workspace_path = Path.cwd()
     
     workspace_path.mkdir(parents=True, exist_ok=True)
     
@@ -138,7 +140,7 @@ def setup_workspace(
     logger.info("This will install Elan, Lean, and build repl, ast_export, and mathlib4.")
     
     try:
-        result = subprocess.run(
+        subprocess.run(
             ["bash", str(setup_sh)],
             cwd=str(workspace_path),
             env=env,

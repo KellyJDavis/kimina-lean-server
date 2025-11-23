@@ -146,11 +146,15 @@ class Repl:
 
             os.setsid()
 
+        # Type assertion: paths are set by Settings model_validator
+        assert settings.repl_path is not None, "repl_path should be set by Settings"
+        assert settings.project_dir is not None, "project_dir should be set by Settings"
+
         self.proc = await asyncio.create_subprocess_exec(
             "lake",
             "env",
-            settings.repl_path,
-            cwd=settings.project_dir,
+            str(settings.repl_path),
+            cwd=str(settings.project_dir),
             env=os.environ,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
