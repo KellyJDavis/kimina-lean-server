@@ -32,6 +32,15 @@ jobs:
         with:
           python-version-file: "pyproject.toml"
 
+      - name: Install system dependencies for pyarrow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libarrow-dev \
+            libparquet-dev \
+            cmake \
+            pkg-config
+
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
