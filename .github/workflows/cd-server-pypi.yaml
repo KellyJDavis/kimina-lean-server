@@ -1,4 +1,4 @@
-name: Publish Client to PyPI
+name: Publish Server to PyPI
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     # Skip if manually triggered with publish=false
     # Note: Currently publishes on all releases. To filter by tag, add:
-    # && !startsWith(github.event.release.tag_name, 'server-')
+    # && !startsWith(github.event.release.tag_name, 'client-')
     if: |
       (github.event_name == 'release') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
@@ -32,18 +32,30 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: pyproject.toml
+          python-version-file: pyproject-server.toml
 
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade build hatchling
 
+      - name: Generate Prisma client
+        run: |
+          python -m pip install prisma
+          # Prisma schema is in the prisma/ directory
+          prisma generate --schema=prisma/schema.prisma
+
       - name: Build wheel and sdist
         run: |
+          # Use pyproject-server.toml for server package
+          cp pyproject-server.toml pyproject.toml
           python -m build --wheel --sdist
+          # Restore original pyproject.toml (if it exists in git)
+          git checkout pyproject.toml 2>/dev/null || true
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           repository-url: https://upload.pypi.org/legacy/
+          packages-dir: dist/
+

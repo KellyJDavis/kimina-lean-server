@@ -1,4 +1,5 @@
 import logging
+import sys
 from types import FrameType
 from typing import Any
 
@@ -24,7 +25,8 @@ class InterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(lvl, record.getMessage())
 
 
-if __name__ == "__main__":
+def run_server() -> None:
+    """Run the FastAPI server."""
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
@@ -39,3 +41,59 @@ if __name__ == "__main__":
         use_colors=settings.environment != Environment.prod,
         log_config=None,
     )
+
+
+def main() -> None:
+    """Main entry point for kimina-ast-server command.
+    
+    Supports subcommands:
+    - kimina-ast-server (or kimina-ast-server run) - Start the server
+    - kimina-ast-server setup - Set up workspace
+    """
+    # Check for subcommands
+    if len(sys.argv) > 1:
+        subcommand = sys.argv[1]
+        
+        if subcommand == "setup":
+            # Import and run setup command
+            from .setup import main as setup_main
+            
+            # Remove 'setup' from argv so argparse in setup.py works correctly
+            sys.argv = [sys.argv[0]] + sys.argv[2:]
+            setup_main()
+            return
+        elif subcommand in ("--help", "-h", "help"):
+            print("""kimina-ast-server - Kimina Lean Server
+
+Commands:
+  kimina-ast-server          Start the server (default)
+  kimina-ast-server run      Start the server
+  kimina-ast-server setup    Set up Lean workspace
+
+Options:
+  --help, -h                 Show this help message
+
+For more information, see: https://github.com/project-numina/kimina-lean-server
+""")
+            return
+        elif subcommand == "run":
+            # Remove 'run' from argv
+            sys.argv = sys.argv[:1] + sys.argv[2:]
+            run_server()
+            return
+        elif subcommand.startswith("-"):
+            # It's a flag, pass through to server (though server doesn't use any)
+            run_server()
+            return
+        else:
+            # Unknown subcommand
+            logger.error(f"Unknown subcommand: {subcommand}")
+            logger.info("Use 'kimina-ast-server --help' for usage information")
+            sys.exit(1)
+    else:
+        # No arguments, just run the server
+        run_server()
+
+
+if __name__ == "__main__":
+    main()
