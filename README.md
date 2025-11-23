@@ -7,7 +7,8 @@
 
 <p align="center">
     <a href="https://projectnumina.ai/"><img alt="Project Numina" src="images/logo_projectNumina_light.png" style="height:20px; width:auto; vertical-align:middle; border-radius:4px;"></a>
-    <a href="https://pypi.org/project/kimina-ast-client" rel="nofollow"><img alt="PyPI version" src="https://img.shields.io/pypi/v/kimina-ast-client.svg" style="max-width:100%;"></a>
+    <a href="https://pypi.org/project/kimina-ast-client" rel="nofollow"><img alt="PyPI client version" src="https://img.shields.io/pypi/v/kimina-ast-client.svg" style="max-width:100%;"></a>
+    <a href="https://pypi.org/project/kimina-ast-server" rel="nofollow"><img alt="PyPI server version" src="https://img.shields.io/pypi/v/kimina-ast-server.svg" style="max-width:100%;"></a>
     <a href="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml" rel="nofollow"><img alt="CI" src="https://github.com/project-numina/kimina-lean-server/actions/workflows/ci.yaml/badge.svg" style="max-width:100%;"></a>
 </p>
 
@@ -32,6 +33,44 @@ This repository contains the source code for:
 - the Kimina client to interact with it
 
 ## Server
+
+### Install from PyPI (Recommended)
+
+Install the server package from PyPI:
+
+```sh
+pip install kimina-ast-server
+```
+
+Set up the Lean workspace (installs Elan, Lean, repl, ast_export, and mathlib4):
+
+```sh
+# Setup in current directory
+kimina-ast-server setup
+
+# Or setup in a specific directory
+kimina-ast-server setup --workspace ~/lean-workspace
+
+# Setup and save configuration
+kimina-ast-server setup --workspace ~/lean-workspace --save-config
+```
+
+Start the server:
+
+```sh
+# If you ran setup in current directory, just run:
+kimina-ast-server
+
+# If workspace is elsewhere, set the environment variable:
+export LEAN_SERVER_WORKSPACE=~/lean-workspace
+kimina-ast-server
+```
+
+The server will automatically discover the workspace if you run it from the workspace directory, or you can set `LEAN_SERVER_WORKSPACE` to point to your workspace location.
+
+For more details, see [README-server.md](./README-server.md).
+
+### Install from Source
 
 From source with `requirements.txt` (option to use `uv`, see [Contributing](#contributing)):
 ```sh
@@ -139,6 +178,7 @@ Or from source with `pip install -e .`
 
 | Variable                              | Default       | Description                                            |
 | ------------------------------------- | ------------- | ------------------------------------------------------ |
+| `LEAN_SERVER_WORKSPACE`               | Auto-detected | Path to workspace directory containing `repl/`, `ast_export/`, and `mathlib4/` |
 | `LEAN_SERVER_HOST`                    | `0.0.0.0`     | Host address to bind the server                        |
 | `LEAN_SERVER_PORT`                    | `8000`        | Port number for the server                             |
 | `LEAN_SERVER_LOG_LEVEL`               | `INFO`        | Logging level (`DEBUG`, `INFO`, `ERROR`, etc.)         |
@@ -150,11 +190,18 @@ Or from source with `pip install -e .`
 | `LEAN_SERVER_MAX_WAIT`                | `60`          | Maximum wait time to wait for a REPL (in seconds)      |
 | `LEAN_SERVER_INIT_REPLS`              | `{}`          | Map of header to REPL count to initialize with         |
 | `LEAN_SERVER_API_KEY`                 | `None`        | Optional API key for authentication                    |
-| `LEAN_SERVER_REPL_PATH`               | `repl/.lake/build/bin/repl` | Path to REPL directory, relative to workspace    |
-| `LEAN_SERVER_AST_EXPORT_BIN`          | `ast_export/.lake/build/bin/ast-export` | Path to AST exporter binary                      |
-| `LEAN_SERVER_AST_EXPORT_PROJECT_DIR`  | `ast_export`    | Path to AST exporter project directory                  |
-| `LEAN_SERVER_PROJECT_DIR`             | `mathlib4`    | Path to Lean 4 project directory, relative to workspace        |
+| `LEAN_SERVER_REPL_PATH`               | Auto-detected | Path to REPL binary (relative to workspace if not absolute) |
+| `LEAN_SERVER_AST_EXPORT_BIN`          | Auto-detected | Path to AST exporter binary (relative to workspace if not absolute) |
+| `LEAN_SERVER_AST_EXPORT_PROJECT_DIR`  | Auto-detected | Path to AST exporter project directory (relative to workspace if not absolute) |
+| `LEAN_SERVER_PROJECT_DIR`             | Auto-detected | Path to Lean 4 project directory (relative to workspace if not absolute) |
 | `LEAN_SERVER_DATABASE_URL`            |               | URL for the database (if using one)                   |
+
+**Workspace Auto-Discovery**: The server automatically discovers the workspace in this order:
+1. `LEAN_SERVER_WORKSPACE` environment variable
+2. Current working directory (if it contains `mathlib4/` or `repl/`)
+3. Common locations: `~/kimina-workspace`, `~/lean-workspace`, `~/workspace`
+
+If you have a non-standard layout, you can override individual paths using the environment variables above.
 
 `LEAN_SERVER_MAX_REPL_MEM` can help avoid certain OOM issues (see Issue #25)
 The server also runs all commands with `"gc": true` to automatically discard environments which helps limit memory usage.
@@ -254,12 +301,13 @@ pytest -m match # Use -n auto to use all cores.
 
 To release the client:
 - bump the version in `pyproject.toml` and run `uv lock`
-- run the "Publish to PyPI" action on Github
+- run the "Publish Client to PyPI" action on Github
 
 To release the server:
+- bump the version in `pyproject-server.toml` and `server/__version__.py`
+- run the "Publish Server to PyPI" action on Github
 - bump the version in `compose-prod.yaml` and in Dockerfile
 - run the "Deploy to Google Cloud" action on Github
-- run the "Publish to Docker" action on Github (doesn't exist yet)
 
 If you change dependencies (uv.lock), make sure to generate `requirements.txt` again with:
 ```sh
