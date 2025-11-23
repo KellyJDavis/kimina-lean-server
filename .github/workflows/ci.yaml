@@ -36,10 +36,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            software-properties-common
+          # Add Apache Arrow PPA for Arrow C++ libraries
+          sudo add-apt-repository -y ppa:apache/arrow
+          sudo apt-get update
+          sudo apt-get install -y \
             libarrow-dev \
             libparquet-dev \
             cmake \
-            pkg-config
+            pkg-config \
+            build-essential
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
