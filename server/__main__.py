@@ -7,9 +7,6 @@ from typing import Any
 import uvicorn
 from loguru import logger
 
-from .main import app
-from .settings import Environment, settings
-
 
 class InterceptHandler(logging.Handler):
     def emit(self, record: Any) -> None:
@@ -28,6 +25,9 @@ class InterceptHandler(logging.Handler):
 
 def run_server() -> None:
     """Run the FastAPI server."""
+    from .settings import Environment, settings
+    from .main import app
+
     # Validate paths when server actually starts (not during import)
     # This allows tests to import the module without paths existing
     if not os.getenv("LEAN_SERVER_SKIP_VALIDATION"):
