@@ -42,8 +42,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["server"]
 include = [
-    "../setup.sh",  # Include setup.sh from repo root
-    "../prisma/**",  # Include prisma schema
+    "setup.sh",       # Include setup.sh from repo root
+    "prisma/**",      # Include prisma schema
     "server/prisma/**",
 ]
 
