@@ -8,6 +8,33 @@ if [ -f .env ]; then
   set +a
 fi
 
+ensure_apple_ld() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+
+  APPLE_LD_PATH=""
+  if command -v xcrun >/dev/null 2>&1; then
+    APPLE_LD_PATH="$(xcrun --find ld 2>/dev/null || true)"
+  fi
+  APPLE_LD_PATH="${APPLE_LD_PATH:-/usr/bin/ld}"
+
+  # Ensure the linker we expose is the Apple ld64 (not lld).
+  if ! "$APPLE_LD_PATH" -v 2>&1 | grep -qi "apple"; then
+    echo "ERROR: Expected Apple ld64, but found $(\"$APPLE_LD_PATH\" -v 2>&1 | head -n 1)" >&2
+    echo "Please install Xcode command line tools (xcode-select --install) to get ld64." >&2
+    exit 1
+  fi
+
+  # Prepend the Apple ld64 bin dir in case other setup steps override PATH (e.g., elan).
+  export PATH="$(dirname "$APPLE_LD_PATH"):${PATH}"
+  export LD="$APPLE_LD_PATH"
+  export REAL_LD64="$APPLE_LD_PATH"
+  echo "Using Apple ld64 at $APPLE_LD_PATH"
+}
+
+ensure_apple_ld
+
 LEAN_SERVER_LEAN_VERSION="${LEAN_SERVER_LEAN_VERSION:-v4.15.0}"
 REPL_REPO_URL="${REPL_REPO_URL:-https://github.com/leanprover-community/repl.git}"
 REPL_BRANCH="${REPL_BRANCH:-$LEAN_SERVER_LEAN_VERSION}"
@@ -23,6 +50,9 @@ echo "Installing Elan"
 curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf \
   | sh -s -- --default-toolchain "${LEAN_SERVER_LEAN_VERSION}" -y
 source "$HOME/.elan/env"
+
+# elan/env prepends its own toolchain binaries to PATH, so re-assert Apple ld.
+ensure_apple_ld
 
 echo "Installing Lean ${LEAN_SERVER_LEAN_VERSION}"
 lean --version
@@ -49,7 +79,13 @@ install_repo() {
   pushd "$name"
     git checkout "${branch}"
     if [ "$name" = "mathlib4" ]; then
-      lake exe cache get
+      # On macOS avoid downloading prebuilt caches that might be linked with lld;
+      # force local builds with Apple ld64 instead.
+      if [[ "$(uname -s)" != "Darwin" ]]; then
+        lake exe cache get
+      else
+        echo "Skipping mathlib4 cache download on macOS to force ld64-local build"
+      fi
     fi
     lake build
     if [ "$upd_manifest" = "true" ]; then
