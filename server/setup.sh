@@ -36,7 +36,7 @@ ensure_apple_ld() {
 ensure_apple_ld
 
 LEAN_SERVER_LEAN_VERSION="${LEAN_SERVER_LEAN_VERSION:-v4.15.0}"
-REPL_REPO_URL="${REPL_REPO_URL:-https://github.com/leanprover-community/repl.git}"
+REPL_REPO_URL="${REPL_REPO_URL:-https://github.com/KellyJDavis/repl.git}"
 REPL_BRANCH="${REPL_BRANCH:-$LEAN_SERVER_LEAN_VERSION}"
 AST_REPO_URL="${AST_REPO_URL:-https://github.com/KellyJDavis/ast_export.git}"
 AST_BRANCH="${AST_BRANCH:-$LEAN_SERVER_LEAN_VERSION}"
