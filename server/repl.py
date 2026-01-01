@@ -344,6 +344,58 @@ class Repl:
             raise LeanError("Failed to read from REPL stdout")
         return b"".join(lines)
 
+    async def health_check(self, timeout: float = 5.0) -> bool:
+        """
+        Verify that the REPL is responsive by sending a simple command.
+        Returns True if the REPL responds, False otherwise.
+        
+        Note: This increments use_count, but that's acceptable since we're about to
+        use the REPL anyway. The health check helps prevent deadlocks from unresponsive REPLs.
+        """
+        if not self.proc or self.proc.returncode is not None:
+            logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: process not running")
+            return False
+        
+        if self.proc.stdin is None or self.proc.stdout is None:
+            logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: pipes not initialized")
+            return False
+
+        try:
+            # Send a simple command that should always work: #eval 1
+            # This will increment use_count and reset env, but that's okay since
+            # we're about to use the REPL anyway
+            health_check_snippet = Snippet(id="health-check", code="#eval 1")
+            try:
+                loop = self._loop or asyncio.get_running_loop()
+                # Check if we can write to stdin (non-blocking check)
+                if self.proc.stdin.is_closing():
+                    logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: stdin is closing")
+                    return False
+                
+                # Actually send the command and wait for response with timeout
+                response = await asyncio.wait_for(
+                    self.send(health_check_snippet, is_header=False),
+                    timeout=timeout,
+                )
+                # If we got a response, the REPL is healthy
+                logger.debug(f"[{self.uuid.hex[:8]}] Health check passed")
+                return True
+            except TimeoutError:
+                logger.warning(
+                    f"[{self.uuid.hex[:8]}] Health check failed: command timed out after {timeout}s"
+                )
+                return False
+            except (LeanError, ReplError, BrokenPipeError) as e:
+                logger.warning(
+                    f"[{self.uuid.hex[:8]}] Health check failed: {type(e).__name__}: {e}"
+                )
+                return False
+        except Exception as e:
+            logger.warning(
+                f"[{self.uuid.hex[:8]}] Health check exception: {type(e).__name__}: {e}"
+            )
+            return False
+
     async def close(self) -> None:
         if self.proc:
             self.last_check_at = datetime.now()

@@ -73,6 +73,19 @@ async def run_checks(
                         "repl_uuid": uuid_hex,
                     },
                 )
+            except ReplError as e:
+                # Health check failed or other REPL error - destroy and retry with new REPL
+                logger.warning(f"REPL prep failed (likely unresponsive REPL): {e}")
+                await manager.destroy_repl(repl)
+                # Try to get a new REPL and retry once
+                try:
+                    repl = await manager.get_repl(header, snippet.id, reuse=reuse)
+                    prep = await manager.prep(repl, snippet.id, timeout, debug)
+                    if prep and prep.error:
+                        return prep
+                except Exception as retry_e:
+                    logger.error("Failed to get replacement REPL after health check failure")
+                    raise HTTPException(500, str(retry_e)) from retry_e
             except Exception as e:
                 logger.error("REPL prep failed")
                 await manager.destroy_repl(repl)
