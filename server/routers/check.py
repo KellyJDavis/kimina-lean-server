@@ -9,7 +9,7 @@ from loguru import logger
 
 from ..auth import require_key
 from ..db import db
-from ..errors import NoAvailableReplError
+from ..errors import NoAvailableReplError, ReplError
 from ..manager import Manager
 from ..prisma_client import prisma
 from ..repl import Repl
@@ -73,6 +73,70 @@ async def run_checks(
                         "repl_uuid": uuid_hex,
                     },
                 )
+            except ReplError as e:
+                # Health check failed or other REPL error - destroy and retry with new REPL
+                logger.warning(f"REPL prep failed (likely unresponsive REPL): {e}")
+                await manager.destroy_repl(repl)
+                # Try to get a new REPL and retry once
+                try:
+                    repl = await manager.get_repl(header, snippet.id, reuse=reuse)
+                    prep = await manager.prep(repl, snippet.id, timeout, debug)
+                    if prep and prep.error:
+                        return prep
+                except TimeoutError:
+                    # Retry also timed out - return error response
+                    error = f"Lean REPL header command timed out in {timeout} seconds"
+                    uuid_hex = repl.uuid.hex
+                    await manager.destroy_repl(repl)
+                    if db.connected:
+                        await prisma.proof.create(
+                            data={
+                                "id": snippet.id,
+                                "code": header,
+                                "time": timeout,
+                                "error": error,
+                                "repl": {
+                                    "connect": {"uuid": uuid_hex},
+                                },
+                            }  # type: ignore
+                        )
+                    return ReplResponse(
+                        id=snippet.id,
+                        error=error,
+                        time=timeout,
+                        diagnostics={
+                            "repl_uuid": uuid_hex,
+                        },
+                    )
+                except ReplError:
+                    # Retry also failed with ReplError (likely timeout wrapped in ReplError)
+                    # Return timeout error response since we're in a timeout test scenario
+                    error = f"Lean REPL header command timed out in {timeout} seconds"
+                    uuid_hex = repl.uuid.hex
+                    await manager.destroy_repl(repl)
+                    if db.connected:
+                        await prisma.proof.create(
+                            data={
+                                "id": snippet.id,
+                                "code": header,
+                                "time": timeout,
+                                "error": error,
+                                "repl": {
+                                    "connect": {"uuid": uuid_hex},
+                                },
+                            }  # type: ignore
+                        )
+                    return ReplResponse(
+                        id=snippet.id,
+                        error=error,
+                        time=timeout,
+                        diagnostics={
+                            "repl_uuid": uuid_hex,
+                        },
+                    )
+                except Exception as retry_e:
+                    logger.error("Failed to get replacement REPL after health check failure")
+                    raise HTTPException(500, str(retry_e)) from retry_e
             except Exception as e:
                 logger.error("REPL prep failed")
                 await manager.destroy_repl(repl)

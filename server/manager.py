@@ -180,6 +180,23 @@ class Manager:
         self, repl: Repl, snippet_id: str, timeout: float, debug: bool
     ) -> ReplResponse | None:
         if repl.is_running:
+            # REPL is being reused - verify it's still responsive
+            # Use a shorter timeout for health check to avoid blocking too long
+            health_check_timeout = min(5.0, timeout / 4)
+            logger.debug(
+                f"[{repl.uuid.hex[:8]}] Performing health check on reused REPL"
+            )
+            is_healthy = await repl.health_check(timeout=health_check_timeout)
+            if not is_healthy:
+                logger.warning(
+                    f"[{repl.uuid.hex[:8]}] Reused REPL failed health check, marking for destruction"
+                )
+                # Mark the REPL as dead so it gets cleaned up
+                # Return an error response to trigger REPL recreation
+                raise ReplError(
+                    f"REPL {repl.uuid.hex[:8]} failed health check and is not responsive"
+                )
+            logger.debug(f"[{repl.uuid.hex[:8]}] Health check passed")
             return None
 
         try:

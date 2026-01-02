@@ -140,8 +140,8 @@ async def test_mathlib(client: TestClient) -> None:
             ReplResponse(
                 id=uuid,
                 response=CommandResponse(
-                    env=2
-                ),  # Env is 2 because max one repl and manager shared by all tests.
+                    env=3
+                ),  # Env is 3 because: reused REPL runs health check (#eval 1) which increments env to 2, then the actual snippet runs incrementing to 3.
             )
         ]
     ).model_dump(exclude_none=True)
@@ -237,7 +237,7 @@ async def test_timeout(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "client",
     [
-        {"max_repls": 1, "max_repl_uses": 3, "init_repls": {}, "database_url": None},
+        {"max_repls": 1, "max_repl_uses": 5, "init_repls": {}, "database_url": None},
     ],
     indirect=True,  # To parametrize fixture
 )
