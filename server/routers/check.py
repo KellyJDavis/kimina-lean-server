@@ -108,7 +108,7 @@ async def run_checks(
                             "repl_uuid": uuid_hex,
                         },
                     )
-                except ReplError as retry_e:
+                except ReplError:
                     # Retry also failed with ReplError (likely timeout wrapped in ReplError)
                     # Return timeout error response since we're in a timeout test scenario
                     error = f"Lean REPL header command timed out in {timeout} seconds"
