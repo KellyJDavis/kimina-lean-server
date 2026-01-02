@@ -366,20 +366,23 @@ class Repl:
             # we're about to use the REPL anyway
             health_check_snippet = Snippet(id="health-check", code="#eval 1")
             try:
-                loop = self._loop or asyncio.get_running_loop()
                 # Check if we can write to stdin (non-blocking check)
                 if self.proc.stdin.is_closing():
                     logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: stdin is closing")
                     return False
                 
                 # Actually send the command and wait for response with timeout
-                response = await asyncio.wait_for(
+                cmd_response, _, _ = await asyncio.wait_for(
                     self.send(health_check_snippet, is_header=False),
                     timeout=timeout,
                 )
-                # If we got a response, the REPL is healthy
-                logger.debug(f"[{self.uuid.hex[:8]}] Health check passed")
-                return True
+                # If we got a CommandResponse (not an Error), the REPL is healthy
+                if isinstance(cmd_response, CommandResponse):
+                    logger.debug(f"[{self.uuid.hex[:8]}] Health check passed")
+                    return True
+                else:
+                    logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: got error response")
+                    return False
             except TimeoutError:
                 logger.warning(
                     f"[{self.uuid.hex[:8]}] Health check failed: command timed out after {timeout}s"

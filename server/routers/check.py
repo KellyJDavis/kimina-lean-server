@@ -9,7 +9,7 @@ from loguru import logger
 
 from ..auth import require_key
 from ..db import db
-from ..errors import NoAvailableReplError
+from ..errors import NoAvailableReplError, ReplError
 from ..manager import Manager
 from ..prisma_client import prisma
 from ..repl import Repl
