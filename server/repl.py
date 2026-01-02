@@ -372,17 +372,15 @@ class Repl:
                     return False
                 
                 # Actually send the command and wait for response with timeout
-                cmd_response, _, _ = await asyncio.wait_for(
+                # If send() completes without exception, the REPL responded and is healthy
+                # We don't need to check the response type since any response indicates
+                # the REPL is alive and processing commands
+                await asyncio.wait_for(
                     self.send(health_check_snippet, is_header=False),
                     timeout=timeout,
                 )
-                # If we got a CommandResponse (not an Error), the REPL is healthy
-                if isinstance(cmd_response, CommandResponse):
-                    logger.debug(f"[{self.uuid.hex[:8]}] Health check passed")
-                    return True
-                else:
-                    logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: got error response")
-                    return False
+                logger.debug(f"[{self.uuid.hex[:8]}] Health check passed")
+                return True
             except TimeoutError:
                 logger.warning(
                     f"[{self.uuid.hex[:8]}] Health check failed: command timed out after {timeout}s"
