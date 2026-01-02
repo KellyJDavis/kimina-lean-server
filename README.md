@@ -307,7 +307,6 @@ To release the server:
 - bump the version in `pyproject-server.toml` and `server/__version__.py`
 - run the "Publish Server to PyPI" action on Github
 - bump the version in `compose-prod.yaml` and in Dockerfile
-- run the "Deploy to Google Cloud" action on Github
 
 If you change dependencies (uv.lock), make sure to generate `requirements.txt` again with:
 ```sh
