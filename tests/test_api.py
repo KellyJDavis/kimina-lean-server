@@ -237,7 +237,7 @@ async def test_timeout(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "client",
     [
-        {"max_repls": 1, "max_repl_uses": 3, "init_repls": {}, "database_url": None},
+        {"max_repls": 1, "max_repl_uses": 5, "init_repls": {}, "database_url": None},
     ],
     indirect=True,  # To parametrize fixture
 )
