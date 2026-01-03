@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import require_key
 from ..manager import Manager
+from ..process_utils import kill_process_safely
 from ..settings import settings
 from .check import get_manager
 
@@ -69,8 +70,8 @@ async def run_ast_one(module: str, one: bool, timeout: float) -> AstModuleResult
                 proc.communicate(), timeout=timeout
             )
         except asyncio.TimeoutError:
-            proc.kill()
-            logger.error("[AST] Timeout exporting module {} after {}s", module, timeout)
+            logger.error("[AST] Timeout exporting module {} after {}s, killing process", module, timeout)
+            await kill_process_safely(proc, use_process_group=True, logger_instance=logger)
             return AstModuleResult(
                 module=module,
                 error=f"timed out after {timeout}s",
@@ -225,12 +226,12 @@ async def ast_from_code(
                 proc.communicate(), timeout=float(body.timeout)
             )
         except asyncio.TimeoutError:
-            proc.kill()
             logger.error(
-                "[AST] Timeout exporting code module {} after {}s",
+                "[AST] Timeout exporting code module {} after {}s, killing process",
                 body.module,
                 body.timeout,
             )
+            await kill_process_safely(proc, use_process_group=True, logger_instance=logger)
             return AstModuleResponse(
                 results=[
                     AstModuleResult(

@@ -237,22 +237,39 @@ async def check(
     manager: Manager = Depends(get_manager),
     _: str = Depends(require_key),
 ) -> CheckResponse:
-    task = asyncio.create_task(
-        run_checks(
-            request.snippets,
-            float(request.timeout),
-            request.debug,
-            manager,
-            request.reuse,
-            request.infotree,
+    # Calculate a safety timeout: request timeout * number of snippets + buffer
+    # This provides a safety net in case inner timeouts fail
+    safety_timeout = float(request.timeout) * len(request.snippets) + 10.0
+
+    async def run_with_safety_net() -> CheckResponse:
+        task = asyncio.create_task(
+            run_checks(
+                request.snippets,
+                float(request.timeout),
+                request.debug,
+                manager,
+                request.reuse,
+                request.infotree,
+            )
         )
-    )
 
-    while not task.done():
-        if await raw_request.is_disconnected():
-            task.cancel()
-            raise HTTPException(499, "Client disconnected")
-        await asyncio.sleep(0.1)
+        while not task.done():
+            if await raw_request.is_disconnected():
+                task.cancel()
+                raise HTTPException(499, "Client disconnected")
+            await asyncio.sleep(0.1)
 
-    results = await task
-    return CheckResponse(results=results)
+        results = await task
+        return CheckResponse(results=results)
+
+    try:
+        return await asyncio.wait_for(run_with_safety_net(), timeout=safety_timeout)
+    except asyncio.TimeoutError:
+        logger.error(
+            f"Safety timeout ({safety_timeout}s) exceeded for /check endpoint "
+            f"with {len(request.snippets)} snippet(s)"
+        )
+        raise HTTPException(
+            504,
+            f"Request timed out after {safety_timeout:.1f}s safety timeout",
+        )

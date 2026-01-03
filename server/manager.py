@@ -83,6 +83,9 @@ class Manager:
                 )
                 if reuse:
                     for i, r in enumerate(self._free):
+                        # Skip REPLs that have been killed (but allow unstarted REPLs)
+                        if r.is_killed:
+                            continue
                         if (
                             r.header == header
                         ):  # repl shouldn't be exhausted (max uses to check)
@@ -130,6 +133,7 @@ class Manager:
             self._busy.discard(repl)
             if repl in self._free:
                 self._free.remove(repl)
+            # close_verbose will handle already-killed REPLs gracefully (close() is idempotent)
             asyncio.create_task(close_verbose(repl))
             self._cond.notify(1)
 
@@ -139,6 +143,18 @@ class Manager:
                 logger.error(
                     f"Attempted to release a REPL that is not busy: {repl.uuid.hex[:8]}"
                 )
+                return
+
+            # If REPL has been killed (not just not started), destroy it instead of releasing
+            if repl.is_killed:
+                logger.warning(
+                    f"REPL {repl.uuid.hex[:8]} has been killed, destroying instead of releasing"
+                )
+                self._busy.discard(repl)
+                if repl in self._free:
+                    self._free.remove(repl)
+                asyncio.create_task(close_verbose(repl))
+                self._cond.notify(1)
                 return
 
             if repl.exhausted:

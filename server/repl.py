@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import platform
-import signal
 import tempfile
 from asyncio.subprocess import Process
 from datetime import datetime
@@ -26,6 +25,7 @@ from .errors import LeanError, ReplError
 from .logger import console
 from .models import ReplStatus
 from .prisma_client import prisma
+from .process_utils import kill_process_safely
 from .settings import Environment, settings
 from .utils import is_blank
 
@@ -93,6 +93,9 @@ class Repl:
         self._cpu_task: asyncio.Task[None] | None = None
         self._mem_task: asyncio.Task[None] | None = None
 
+        # Flag to track if REPL process has been forcefully killed
+        self._killed: bool = False
+
     @classmethod
     async def create(cls, header: str, max_repl_uses: int, max_repl_mem: int) -> "Repl":
         if db.connected:
@@ -126,6 +129,49 @@ class Repl:
             # Header does not count towards uses.
             return self.use_count >= self.max_repl_uses + 1
         return self.use_count >= self.max_repl_uses
+
+    async def kill_immediately(self) -> None:
+        """
+        Immediately kill the REPL process and mark it as killed.
+
+        This is called when a timeout occurs to ensure the process is terminated
+        immediately rather than waiting for cleanup. The REPL will be marked as
+        killed to prevent reuse.
+
+        This method is idempotent - safe to call multiple times.
+        """
+        if self._killed:
+            return
+
+        if not self.proc:
+            self._killed = True
+            return
+
+        self._killed = True
+        logger.warning(
+            f"[{self.uuid.hex[:8]}] Killing REPL process immediately due to timeout/hang"
+        )
+
+        # Cancel CPU and memory monitor tasks
+        if self._cpu_task:
+            self._cpu_task.cancel()
+        if self._mem_task:
+            self._mem_task.cancel()
+
+        # Kill the process using the safe kill function
+        try:
+            await kill_process_safely(
+                self.proc, use_process_group=True, logger_instance=logger
+            )
+        except Exception as e:
+            logger.error(f"[{self.uuid.hex[:8]}] Error killing REPL process: {e}")
+
+        # Close stdin (stdout/stderr are closed automatically when process terminates)
+        try:
+            if self.proc.stdin:
+                self.proc.stdin.close()
+        except Exception as e:
+            logger.debug(f"[{self.uuid.hex[:8]}] Error closing stdin: {e}")
 
     async def start(self) -> None:
         # TODO: try/catch this bit and raise as REPL startup error.
@@ -207,7 +253,14 @@ class Repl:
     def is_running(self) -> bool:
         if not self.proc:
             return False
+        if self._killed:
+            return False
         return self.proc.returncode is None
+
+    @property
+    def is_killed(self) -> bool:
+        """Check if the REPL process has been forcefully killed."""
+        return self._killed
 
     async def send_timeout(
         self,
@@ -229,10 +282,12 @@ class Repl:
             )
         except TimeoutError as e:
             logger.error(
-                "\\[{}] Lean REPL command timed out in {} seconds",
+                "\\[{}] Lean REPL command timed out in {} seconds, killing process immediately",
                 self.uuid.hex[:8],
                 timeout,
             )
+            # Kill the process immediately to prevent hang
+            await self.kill_immediately()
             raise e
         except LeanError as e:
             logger.exception("Lean REPL error: %s", e)
@@ -259,9 +314,13 @@ class Repl:
         self._cpu_max = 0.0
         self._mem_max = 0
 
-        if not self.proc or self.proc.returncode is not None:
-            logger.error("REPL process not started or shut down")
-            raise ReplError("REPL process not started or shut down")
+        if not self.is_running:
+            logger.error(f"[{self.uuid.hex[:8]}] REPL process not running (killed={self._killed})")
+            raise ReplError("REPL process not running or has been killed")
+
+        if self.proc is None:
+            logger.error(f"[{self.uuid.hex[:8]}] REPL process not initialized")
+            raise ReplError("REPL process not initialized")
 
         loop = self._loop or asyncio.get_running_loop()
 
@@ -398,16 +457,44 @@ class Repl:
             return False
 
     async def close(self) -> None:
-        if self.proc:
-            self.last_check_at = datetime.now()
-            assert self.proc.stdin is not None, "stdin pipe not initialized"
-            self.proc.stdin.close()
-            os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
-            await self.proc.wait()
+        if self._killed:
+            # Already killed, just do cleanup
             if self._cpu_task:
                 self._cpu_task.cancel()
             if self._mem_task:
                 self._mem_task.cancel()
+
+            if db.connected:
+                await prisma.repl.update(
+                    where={"uuid": str(self.uuid)},
+                    data={"status": ReplStatus.STOPPED},  # type: ignore
+                )
+            return
+
+        if self.proc:
+            self.last_check_at = datetime.now()
+            self._killed = True
+
+            # Cancel CPU and memory monitor tasks
+            if self._cpu_task:
+                self._cpu_task.cancel()
+            if self._mem_task:
+                self._mem_task.cancel()
+
+            # Close stdin
+            try:
+                if self.proc.stdin:
+                    self.proc.stdin.close()
+            except Exception as e:
+                logger.debug(f"[{self.uuid.hex[:8]}] Error closing stdin in close(): {e}")
+
+            # Kill the process using the safe kill function
+            try:
+                await kill_process_safely(
+                    self.proc, use_process_group=True, logger_instance=logger
+                )
+            except Exception as e:
+                logger.error(f"[{self.uuid.hex[:8]}] Error killing REPL process in close(): {e}")
 
             if db.connected:
                 await prisma.repl.update(
