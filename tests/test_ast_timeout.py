@@ -2,6 +2,25 @@
 import pytest
 
 from server.routers.ast import run_ast_one
+from server.settings import settings
+
+
+def _ast_tools_available() -> bool:
+    """Return True if ast_export tooling is available in the workspace."""
+    return (
+        settings.ast_export_project_dir is not None
+        and settings.ast_export_project_dir.exists()
+        and settings.ast_export_bin is not None
+        and settings.ast_export_bin.exists()
+        and settings.project_dir is not None
+        and settings.project_dir.exists()
+    )
+
+
+pytestmark = pytest.mark.skipif(
+    not _ast_tools_available(),
+    reason="AST export tooling not available (run `kimina-ast-server setup`)",
+)
 
 
 @pytest.mark.asyncio
