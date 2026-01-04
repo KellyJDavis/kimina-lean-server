@@ -13,6 +13,63 @@ from typing import Any
 from loguru import logger
 
 
+def _get_safe_process_group(proc: Process, logger_instance: Any | None = None) -> int | None:
+    """
+    Safely get the process group ID for a process, with verification.
+
+    This function verifies that:
+    1. The process group exists
+    2. The process group is not the parent process group (to avoid killing test runners/shells)
+    3. The process is actually in that process group
+
+    Returns the process group ID if safe to kill, None otherwise.
+
+    Args:
+        proc: The asyncio subprocess Process
+        logger_instance: Optional logger instance for logging operations
+
+    Returns:
+        Process group ID if safe to kill, None if we should fall back to process kill
+    """
+    log = logger_instance if logger_instance is not None else logger
+
+    try:
+        # Get the process group ID
+        pgid = os.getpgid(proc.pid)
+
+        # Safety check: Don't kill the parent process group
+        # The parent process group is typically the shell/test runner
+        # REPL processes use os.setsid() to create a new process group,
+        # so their pgid should equal their pid (they're the group leader)
+        parent_pgid = os.getpgid(os.getppid())
+        if pgid == parent_pgid:
+            log.warning(
+                f"Process {proc.pid} is in parent process group {pgid}. "
+                "This would kill the parent process. Falling back to process kill."
+            )
+            return None
+
+        # Additional safety: On Unix systems, if the process is the group leader,
+        # its pgid should equal its pid. If not, be cautious.
+        # However, we allow killing if pgid != pid because the process might
+        # have been started in a different group intentionally.
+        # The key check is that we don't kill the parent group.
+
+        log.debug(f"Process group {pgid} verified safe to kill (process {proc.pid})")
+        return pgid
+
+    except ProcessLookupError:
+        # Process already dead
+        log.debug(f"Process {proc.pid} not found, may already be terminated")
+        return None
+    except OSError as e:
+        log.warning(
+            f"Error getting process group for {proc.pid}: {e}. "
+            "Falling back to process kill."
+        )
+        return None
+
+
 async def kill_process_group(
     proc: Process,
     timeout: float = 5.0,
@@ -23,6 +80,9 @@ async def kill_process_group(
 
     This is more reliable than proc.kill() because it kills child processes
     (e.g., when using 'lake env', the lake process and its repl child).
+
+    This function includes safety checks to ensure we don't accidentally kill
+    the parent process group (which could kill test runners or shells).
 
     Args:
         proc: The asyncio subprocess Process to kill
@@ -39,20 +99,15 @@ async def kill_process_group(
         log.debug(f"Process {proc.pid} already terminated (returncode={proc.returncode})")
         return
 
-    try:
-        pgid = os.getpgid(proc.pid)
-        log.debug(f"Killing process group {pgid} (process {proc.pid})")
-        os.killpg(pgid, signal.SIGKILL)
-    except ProcessLookupError:
-        # Process already dead
-        log.debug(f"Process {proc.pid} not found, may already be terminated")
-        return
-    except PermissionError:
-        log.warning(
-            f"Permission denied killing process group for {proc.pid}, "
+    # Get the process group ID with safety checks
+    pgid = _get_safe_process_group(proc, logger_instance)
+    
+    if pgid is None:
+        # Safety checks failed, fall back to process kill
+        log.debug(
+            f"Process group kill not safe for {proc.pid}, "
             "falling back to process kill"
         )
-        # Fall back to killing just the process
         try:
             proc.kill()
         except ProcessLookupError:
@@ -61,6 +116,29 @@ async def kill_process_group(
         except Exception as e:
             log.error(f"Error during fallback process kill: {e}")
             raise
+    else:
+        # Safe to kill the process group
+        try:
+            log.debug(f"Killing process group {pgid} (process {proc.pid})")
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            # Process group already dead
+            log.debug(f"Process group {pgid} not found, may already be terminated")
+            return
+        except PermissionError:
+            log.warning(
+                f"Permission denied killing process group {pgid} for {proc.pid}, "
+                "falling back to process kill"
+            )
+            # Fall back to killing just the process
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                log.debug(f"Process {proc.pid} not found during fallback kill")
+                return
+            except Exception as e:
+                log.error(f"Error during fallback process kill: {e}")
+                raise
 
     # Wait for process termination with timeout
     try:

@@ -37,14 +37,14 @@ repos:
     hooks:
       - id: pytest-push
         name: pytest (pre-push) - full test suite
-        entry: bash -c 'LEAN_SERVER_SKIP_VALIDATION=1 uv run pytest -n 0'
+        entry: bash -c 'LEAN_SERVER_SKIP_VALIDATION=1 uv run pytest'
         language: system
         stages: [pre-push]
         pass_filenames: false
         always_run: true
       - id: pytest-perfs-push
         name: pytest (pre-push) - performance tests
-        entry: uv run pytest -m perfs -n 0
+        entry: uv run pytest -m perfs
         language: system
         stages: [pre-push]
         pass_filenames: false
