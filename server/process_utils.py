@@ -41,13 +41,24 @@ def _get_safe_process_group(proc: Process, logger_instance: Any | None = None) -
         # The parent process group is typically the shell/test runner
         # REPL processes use os.setsid() to create a new process group,
         # so their pgid should equal their pid (they're the group leader)
-        parent_pgid = os.getpgid(os.getppid())
-        if pgid == parent_pgid:
-            log.warning(
-                f"Process {proc.pid} is in parent process group {pgid}. "
-                "This would kill the parent process. Falling back to process kill."
+        try:
+            parent_pid = os.getppid()
+            parent_pgid = os.getpgid(parent_pid)
+            if pgid == parent_pgid:
+                log.warning(
+                    f"Process {proc.pid} is in parent process group {pgid}. "
+                    "This would kill the parent process. Falling back to process kill."
+                )
+                return None
+        except (OSError, ProcessLookupError):
+            # Parent process might not exist or we can't access it
+            # This can happen in certain CI environments or when running in containers
+            # In this case, we'll allow the process group kill to proceed
+            # since we can't verify it's unsafe
+            log.debug(
+                f"Could not verify parent process group for {proc.pid}, "
+                "proceeding with process group kill"
             )
-            return None
 
         # Additional safety: On Unix systems, if the process is the group leader,
         # its pgid should equal its pid. If not, be cautious.
