@@ -390,31 +390,69 @@ class Repl:
             logger.error("REPL process not started or stdout pipe not initialized")
             raise ReplError("REPL process not started or stdout pipe not initialized")
 
-        lines: list[bytes] = []
+        chunks: list[bytes] = []
+        buffer = b""
+        # Read in chunks to avoid 64KB per-line limit
+        # The REPL protocol uses blank lines (\n\n) as terminators
+        chunk_size = 64 * 1024  # 64KB chunks
+        max_response_size = 10 * 1024 * 1024  # 10MB safety limit
+
         try:
             while True:
-                chunk = await self.proc.stdout.readline()
-                # EOF or blank line as terminator
-                if not chunk or not chunk.strip():
+                # Read a chunk of data
+                chunk = await self.proc.stdout.read(chunk_size)
+                if not chunk:
+                    # EOF reached - return what we have
+                    if buffer:
+                        chunks.append(buffer)
                     break
-                lines.append(chunk)
+
+                buffer += chunk
+
+                # Check if we have a blank line terminator (\n\n)
+                # The protocol uses double newline to terminate responses
+                if b"\n\n" in buffer:
+                    # Split at the first double newline
+                    parts = buffer.split(b"\n\n", 1)
+                    # Include everything up to (but not including) the terminator
+                    chunks.append(parts[0])
+                    break
+
+                # Safety check to prevent unbounded memory growth
+                if len(buffer) > max_response_size:
+                    logger.warning(
+                        f"[{self.uuid.hex[:8]}] Response buffer exceeded {max_response_size // (1024*1024)}MB, "
+                        "this may indicate an issue with the REPL response"
+                    )
+                    # Continue reading but log a warning
+        except asyncio.LimitOverrunError as e:
+            # This shouldn't happen with chunked reading, but handle it gracefully
+            logger.error(
+                f"[{self.uuid.hex[:8]}] LimitOverrunError while reading response: {e}. "
+                f"Buffer size: {len(buffer)} bytes"
+            )
+            raise LeanError(
+                f"Response line exceeded buffer limit. This may indicate an extremely large "
+                f"response from Lean. Buffer size: {len(buffer)} bytes"
+            ) from e
         except Exception as e:
             logger.error("Failed to read from REPL stdout: %s", e)
-            raise LeanError("Failed to read from REPL stdout")
-        return b"".join(lines)
+            raise LeanError("Failed to read from REPL stdout") from e
+
+        return b"".join(chunks)
 
     async def health_check(self, timeout: float = 5.0) -> bool:
         """
         Verify that the REPL is responsive by sending a simple command.
         Returns True if the REPL responds, False otherwise.
-        
+
         Note: This increments use_count, but that's acceptable since we're about to
         use the REPL anyway. The health check helps prevent deadlocks from unresponsive REPLs.
         """
         if not self.proc or self.proc.returncode is not None:
             logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: process not running")
             return False
-        
+
         if self.proc.stdin is None or self.proc.stdout is None:
             logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: pipes not initialized")
             return False
@@ -429,7 +467,7 @@ class Repl:
                 if self.proc.stdin.is_closing():
                     logger.debug(f"[{self.uuid.hex[:8]}] Health check failed: stdin is closing")
                     return False
-                
+
                 # Actually send the command and wait for response with timeout
                 # If send() completes without exception, the REPL responded and is healthy
                 # We don't need to check the response type since any response indicates
