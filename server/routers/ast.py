@@ -6,6 +6,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
@@ -147,6 +148,14 @@ async def ast_from_code(
 ) -> AstModuleResponse:
     if not MODULE_RE.match(body.module):
         raise HTTPException(400, "Invalid module name")
+
+    # IMPORTANT: Always use a unique module name per request.
+    #
+    # ast-export writes to a deterministic output path under `.lake/build/lib/<module>.out.json`.
+    # If multiple concurrent requests share the same module name (the default is "User.Code"),
+    # they will race on the same output file and can return an AST for the wrong request.
+    effective_module = f"{body.module}_{uuid4().hex}"
+
     # Type assertion: paths are set by Settings model_validator
     assert settings.ast_export_bin is not None, (
         "ast_export_bin should be set by Settings"
@@ -162,7 +171,7 @@ async def ast_from_code(
     tmpdir = Path(tempfile.mkdtemp(prefix="ast_code_"))
     try:
         src_dir = tmpdir / "src"
-        mod_rel = Path(*body.module.split("."))  # e.g. User/Code
+        mod_rel = Path(*effective_module.split("."))  # e.g. User/Code
         file_path = src_dir / f"{mod_rel}.lean"
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(body.code, encoding="utf-8")
@@ -200,11 +209,11 @@ async def ast_from_code(
 
         logger.info(
             "[AST] Exporting from code for module {} (len={})",
-            body.module,
+            effective_module,
             len(body.code),
         )
         # Ensure output directory exists inside ast_export project build dir
-        rel = Path(*body.module.split("."))
+        rel = Path(*effective_module.split("."))
         out_dir = settings.ast_export_project_dir / ".lake/build/lib" / rel.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         # Run ast-export via lake in the ast_export project so Lake resolves deps
@@ -215,7 +224,7 @@ async def ast_from_code(
                 "exe",
                 "ast-export",
                 "--one",
-                body.module,
+                effective_module,
                 cwd=str(settings.ast_export_project_dir),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -235,7 +244,7 @@ async def ast_from_code(
             return AstModuleResponse(
                 results=[
                     AstModuleResult(
-                        module=body.module,
+                        module=effective_module,
                         error=f"timed out after {body.timeout}s",
                         time=round(time.perf_counter() - t0, 6),
                     )
@@ -245,12 +254,12 @@ async def ast_from_code(
         if proc.returncode != 0:
             err = stderr_bytes.decode()
             logger.error(
-                "[AST] Export from code failed for module {}: {}", body.module, err
+                "[AST] Export from code failed for module {}: {}", effective_module, err
             )
             return AstModuleResponse(
                 results=[
                     AstModuleResult(
-                        module=body.module,
+                        module=effective_module,
                         error=(err or "ast-export failed"),
                         time=round(time.perf_counter() - t0, 6),
                     )
@@ -264,11 +273,11 @@ async def ast_from_code(
             )
             raw = out_path.read_text(encoding="utf-8")
             data = json.loads(raw)
-            logger.info("[AST] Success for code module {}", body.module)
+            logger.info("[AST] Success for code module {}", effective_module)
             return AstModuleResponse(
                 results=[
                     AstModuleResult(
-                        module=body.module,
+                        module=effective_module,
                         ast=data,
                         time=round(time.perf_counter() - t0, 6),
                         diagnostics={"ast_bytes": len(raw)},
@@ -277,12 +286,12 @@ async def ast_from_code(
             )
         except Exception as e:
             logger.error(
-                "[AST] Failed to read AST for code module {}: {}", body.module, e
+                "[AST] Failed to read AST for code module {}: {}", effective_module, e
             )
             return AstModuleResponse(
                 results=[
                     AstModuleResult(
-                        module=body.module,
+                        module=effective_module,
                         error=f"failed to read AST: {e}",
                         time=round(time.perf_counter() - t0, 6),
                     )
