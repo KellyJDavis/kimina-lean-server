@@ -228,7 +228,7 @@ class Manager:
                     timeout=timeout,
                     is_header=True,
                 )
-            except TimeoutError as e:
+            except (asyncio.TimeoutError, TimeoutError) as e:
                 logger.error("Header command timed out")
                 raise e
             except Exception as e:

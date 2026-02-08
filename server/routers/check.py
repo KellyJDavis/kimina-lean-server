@@ -38,33 +38,36 @@ async def run_checks(
             try:
                 repl = await manager.get_repl(header, snippet.id, reuse=reuse)
             except NoAvailableReplError:
-                logger.exception("No available REPLs")
-                raise HTTPException(429, "No available REPLs") from None
+                logger.warning("No available REPLs")
+                return ReplResponse(id=snippet.id, error="No available REPLs")
             except Exception as e:
                 logger.exception("Failed to get REPL: %s", e)
-                raise HTTPException(500, str(e)) from e
+                return ReplResponse(id=snippet.id, error=f"Failed to get REPL: {e}")
 
             # if reuse is false we should not run the header separate from body
             try:
                 prep = await manager.prep(repl, snippet.id, timeout, debug)
                 if prep and prep.error:
                     return prep
-            except TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 error = f"Lean REPL header command timed out in {timeout} seconds"
                 uuid_hex = repl.uuid.hex
                 await manager.destroy_repl(repl)
                 if db.connected:
-                    await prisma.proof.create(
-                        data={
-                            "id": snippet.id,
-                            "code": header,
-                            "time": timeout,
-                            "error": error,
-                            "repl": {
-                                "connect": {"uuid": uuid_hex},
-                            },
-                        }  # type: ignore
-                    )
+                    try:
+                        await prisma.proof.create(
+                            data={
+                                "id": snippet.id,
+                                "code": header,
+                                "time": timeout,
+                                "error": error,
+                                "repl": {
+                                    "connect": {"uuid": uuid_hex},
+                                },
+                            }  # type: ignore
+                        )
+                    except Exception as db_e:
+                        logger.exception("Failed to persist proof record: %s", db_e)
                 return ReplResponse(
                     id=snippet.id,
                     error=error,
@@ -83,23 +86,26 @@ async def run_checks(
                     prep = await manager.prep(repl, snippet.id, timeout, debug)
                     if prep and prep.error:
                         return prep
-                except TimeoutError:
+                except (asyncio.TimeoutError, TimeoutError):
                     # Retry also timed out - return error response
                     error = f"Lean REPL header command timed out in {timeout} seconds"
                     uuid_hex = repl.uuid.hex
                     await manager.destroy_repl(repl)
                     if db.connected:
-                        await prisma.proof.create(
-                            data={
-                                "id": snippet.id,
-                                "code": header,
-                                "time": timeout,
-                                "error": error,
-                                "repl": {
-                                    "connect": {"uuid": uuid_hex},
-                                },
-                            }  # type: ignore
-                        )
+                        try:
+                            await prisma.proof.create(
+                                data={
+                                    "id": snippet.id,
+                                    "code": header,
+                                    "time": timeout,
+                                    "error": error,
+                                    "repl": {
+                                        "connect": {"uuid": uuid_hex},
+                                    },
+                                }  # type: ignore
+                            )
+                        except Exception as db_e:
+                            logger.exception("Failed to persist proof record: %s", db_e)
                     return ReplResponse(
                         id=snippet.id,
                         error=error,
@@ -115,17 +121,20 @@ async def run_checks(
                     uuid_hex = repl.uuid.hex
                     await manager.destroy_repl(repl)
                     if db.connected:
-                        await prisma.proof.create(
-                            data={
-                                "id": snippet.id,
-                                "code": header,
-                                "time": timeout,
-                                "error": error,
-                                "repl": {
-                                    "connect": {"uuid": uuid_hex},
-                                },
-                            }  # type: ignore
-                        )
+                        try:
+                            await prisma.proof.create(
+                                data={
+                                    "id": snippet.id,
+                                    "code": header,
+                                    "time": timeout,
+                                    "error": error,
+                                    "repl": {
+                                        "connect": {"uuid": uuid_hex},
+                                    },
+                                }  # type: ignore
+                            )
+                        except Exception as db_e:
+                            logger.exception("Failed to persist proof record: %s", db_e)
                     return ReplResponse(
                         id=snippet.id,
                         error=error,
@@ -135,33 +144,43 @@ async def run_checks(
                         },
                     )
                 except Exception as retry_e:
-                    logger.error("Failed to get replacement REPL after health check failure")
-                    raise HTTPException(500, str(retry_e)) from retry_e
+                    logger.exception(
+                        "Failed to get replacement REPL after health check failure"
+                    )
+                    if repl:
+                        await manager.destroy_repl(repl)
+                    return ReplResponse(
+                        id=snippet.id,
+                        error=f"Failed to get replacement REPL: {retry_e}",
+                    )
             except Exception as e:
                 logger.error("REPL prep failed")
                 await manager.destroy_repl(repl)
-                raise HTTPException(500, str(e)) from e
+                return ReplResponse(id=snippet.id, error=f"REPL prep failed: {e}")
 
             try:
                 resp = await repl.send_timeout(
                     Snippet(id=snippet.id, code=body), timeout, infotree=infotree
                 )
-            except TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 error = f"Lean REPL command timed out in {timeout} seconds"
                 uuid_hex = repl.uuid.hex
                 await manager.destroy_repl(repl)
                 if db.connected:
-                    await prisma.proof.create(
-                        data={
-                            "id": snippet.id,
-                            "code": body,
-                            "time": timeout,
-                            "error": error,
-                            "repl": {
-                                "connect": {"uuid": uuid_hex},
-                            },
-                        }  # type: ignore
-                    )
+                    try:
+                        await prisma.proof.create(
+                            data={
+                                "id": snippet.id,
+                                "code": body,
+                                "time": timeout,
+                                "error": error,
+                                "repl": {
+                                    "connect": {"uuid": uuid_hex},
+                                },
+                            }  # type: ignore
+                        )
+                    except Exception as db_e:
+                        logger.exception("Failed to persist proof record: %s", db_e)
                 resp = ReplResponse(
                     id=snippet.id,
                     error=error,
@@ -180,7 +199,7 @@ async def run_checks(
             except Exception as e:
                 logger.exception("Snippet execution failed")
                 await manager.destroy_repl(repl)
-                raise HTTPException(500, str(e)) from e
+                return ReplResponse(id=snippet.id, error=f"Snippet execution failed: {e}")
             else:
                 logger.info(
                     "[{}] Response for [bold magenta]{}[/bold magenta] body →\n{}",
@@ -191,23 +210,26 @@ async def run_checks(
                 await manager.release_repl(repl)
                 # TODO: Try catch everything DB related
                 if db.connected:
-                    await prisma.proof.create(
-                        data={
-                            "id": snippet.id,
-                            "code": body,
-                            "diagnostics": json.dumps(
-                                resp.diagnostics if resp.diagnostics else None
-                            ),
-                            "response": json.dumps(
-                                resp.response if resp.response else None
-                            ),
-                            "time": resp.time,
-                            "error": resp.error,
-                            "repl": {
-                                "connect": {"uuid": repl.uuid.hex},
-                            },
-                        }  # type: ignore
-                    )
+                    try:
+                        await prisma.proof.create(
+                            data={
+                                "id": snippet.id,
+                                "code": body,
+                                "diagnostics": json.dumps(
+                                    resp.diagnostics if resp.diagnostics else None
+                                ),
+                                "response": json.dumps(
+                                    resp.response if resp.response else None
+                                ),
+                                "time": resp.time,
+                                "error": resp.error,
+                                "repl": {
+                                    "connect": {"uuid": repl.uuid.hex},
+                                },
+                            }  # type: ignore
+                        )
+                    except Exception as db_e:
+                        logger.exception("Failed to persist proof record: %s", db_e)
                 if not debug:
                     resp.diagnostics = None
                 return resp
