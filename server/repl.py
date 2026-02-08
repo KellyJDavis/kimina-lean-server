@@ -280,7 +280,7 @@ class Repl:
                 self.send(snippet, is_header=is_header, infotree=infotree),
                 timeout=timeout,
             )
-        except TimeoutError as e:
+        except (asyncio.TimeoutError, TimeoutError):
             logger.error(
                 "\\[{}] Lean REPL command timed out in {} seconds, killing process immediately",
                 self.uuid.hex[:8],
@@ -288,7 +288,7 @@ class Repl:
             )
             # Kill the process immediately to prevent hang
             await self.kill_immediately()
-            raise e
+            raise
         except LeanError as e:
             logger.exception("Lean REPL error: %s", e)
             raise e
@@ -478,7 +478,7 @@ class Repl:
                 )
                 logger.debug(f"[{self.uuid.hex[:8]}] Health check passed")
                 return True
-            except TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 logger.warning(
                     f"[{self.uuid.hex[:8]}] Health check failed: command timed out after {timeout}s"
                 )

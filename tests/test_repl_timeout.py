@@ -1,7 +1,9 @@
 """Tests for REPL timeout and kill functionality."""
 import asyncio
+from datetime import datetime
 import psutil
 import pytest
+from uuid import uuid4
 from kimina_client import Snippet
 
 from server.repl import Repl
@@ -146,6 +148,43 @@ async def test_repl_send_timeout_kills_on_timeout() -> None:
         "Test is flaky - short timeout may complete before timeout occurs. "
         "Timeout handling is verified by kill_immediately tests."
     )
+
+
+@pytest.mark.asyncio
+async def test_repl_send_timeout_catches_asyncio_timeout_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Regression test for Python 3.10+:
+    asyncio.wait_for raises asyncio.TimeoutError (not builtin TimeoutError).
+    """
+
+    repl = Repl(
+        uuid=uuid4(),
+        created_at=datetime.now(),
+        header="",
+        max_repl_mem=8192,
+        max_repl_uses=1,
+    )
+
+    killed = {"called": False}
+
+    async def fake_send(self: Repl, snippet: Snippet, **_: object) -> object:
+        # Ensure send() yields so cancellation can occur.
+        await asyncio.sleep(3600)
+        raise AssertionError("send() should have timed out before completing")
+
+    async def fake_kill_immediately(self: Repl) -> None:
+        killed["called"] = True
+        self._killed = True
+
+    monkeypatch.setattr(Repl, "send", fake_send)
+    monkeypatch.setattr(Repl, "kill_immediately", fake_kill_immediately)
+
+    with pytest.raises(asyncio.TimeoutError):
+        await repl.send_timeout(Snippet(id="test", code="#eval 1"), timeout=0.001)
+
+    assert killed["called"], "Expected kill_immediately() to be invoked on timeout"
 
 
 @pytest.mark.asyncio
